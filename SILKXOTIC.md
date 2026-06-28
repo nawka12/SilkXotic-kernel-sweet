@@ -15,7 +15,10 @@ This is a **private fork** of [`crdroidandroid/android_kernel_xiaomi_sm6150`](ht
 (branch `16.0`). It is **not** a GitHub network-fork (those can't be private) — upstream is wired in as the
 `upstream` remote so crDroid changes can be pulled in (see `silkxotic/sync-upstream.sh`).
 
-Base commit: `731658b` — the exact tree that builds crDroid 12.11's stock kernel (`4.14.357-perf-g731658b235df`).
+Base: a **re-rooted, tree-identical snapshot** of crDroid `16.0` at upstream commit `731658b235df` (the tree
+that builds crDroid 12.11's stock `4.14.357-perf` kernel). Re-rooted (parentless) so this private repo is a
+small, self-contained single-snapshot. Because the base is a fresh root, the **first** upstream sync uses
+`--allow-unrelated-histories` (handled by `silkxotic/sync-upstream.sh`); after that, syncs are normal.
 
 ## What's changed vs stock (the entire diff)
 Six config knobs, verified to exist in this tree, added via `arch/arm64/configs/vendor/silkxotic-opts.config`:
