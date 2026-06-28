@@ -48,12 +48,19 @@ grep -E "CONFIG_(CPU_BOOST|SCHED_CORE_CTL|MSM_PERFORMANCE|SCHED_AUTOGROUP|BALANC
 echo ">>> building Image.gz (-j$JOBS, ThinLTO)  $(date +%T)"
 make O="$OUT" ARCH=arm64 $TOOLS -j"$JOBS" Image.gz
 
+# Base dtb carries the EAS energy model (sdmmagpie.dtsi). We ship a value-only-edited
+# copy via AK3 (keeps the stock sweet dtbo). DTB build is fast; always rebuild fresh.
+echo ">>> building base dtb (energy-model carrier: qcom/xiaomi-sdmmagpie.dtb)  $(date +%T)"
+rm -f "$OUT/arch/arm64/boot/dts/qcom/xiaomi-sdmmagpie.dtb"
+make O="$OUT" ARCH=arm64 $TOOLS qcom/xiaomi-sdmmagpie.dtb
+
 img="$OUT/arch/arm64/boot/Image.gz"
+dtb="$OUT/arch/arm64/boot/dts/qcom/xiaomi-sdmmagpie.dtb"
 echo ">>> DONE $(date).  -> $img"
-ls -lh "$img"
+ls -lh "$img" "$dtb"
 python3 - "$img" <<'PY'
 import sys, gzip, io
 d=gzip.GzipFile(fileobj=io.BytesIO(open(sys.argv[1],'rb').read())).read()
 i=d.find(b'Linux version 4.14'); print(d[i:i+90].decode('latin1','replace'))
 PY
-echo ">>> Next: package with silkxotic/package-ak3.sh (keeps crDroid dtb/dtbo)."
+echo ">>> Next: package with silkxotic/package-ak3.sh (ships modified base dtb, keeps crDroid dtbo)."
