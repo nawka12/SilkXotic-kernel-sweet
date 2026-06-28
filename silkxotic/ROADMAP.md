@@ -79,13 +79,17 @@ scheduler tuning** — plus actually *measuring* the touch-feel the kernel is br
   WALT. Caveat: uclamp.min/max are *also* a userspace-set surface (cgroup cpu controller + per-task
   `sched_setattr`), so like the sched knobs it's liable to be overridden by init — verify it actually
   sticks before investing. Same effort/risk tier as the MGLRU backport (real source work, not a flag).
-- **BORE / CASS scheduler port** — the real source-level "feel" lever now that knob-tuning is proven
-  override-dead (see 🥇). AGNI Reborn (`manipvlator/los_kernel_xiaomi_sm6150`) ships BORE + CASS on the
-  *same* 4.14.357 base, so it's portable in principle — but it's a hot-path **algorithm** swap (BORE =
-  CFS vruntime/pick rework, "better responsive touch"; CASS removes WALT entirely, which our v1.0 knob
-  set is built around) and AGNI is sm6150 vs our sm7150/sdmsteppe — not a drop-in. Medium-high risk; do
-  it as its own experimental build, validate by flash + heavy suite + subjective feel. The only
-  scheduler-behavior change that init can't override.
+- **BORE / CASS scheduler port** — *deprioritized; not needed for Charmeuse.* This was the "feel" lever
+  when knob-tuning had just been proven override-dead — but the **DT EAS energy model (🥇) now fills that
+  role**, sticky and verified, at a fraction of the risk, so BORE is no longer required to make a release
+  "not average." It's also a worse fit than it first looked: BORE reworks **CFS vruntime/pick**, but this
+  kernel runs `SCHED_WALT=y` (WALT drives much of placement/freq, bypassing the CFS logic BORE touches),
+  and AGNI Reborn added BORE *in the same era it removed WALT for PELT+CASS* — i.e. BORE really wants
+  **PELT, not WALT**. So doing it "right" likely drags in the WALT→PELT removal (CASS-tier, invasive),
+  which **breaks our v1.0 foundation** (`core_ctl`/`msm_performance`/WALT migrate knobs). Different *axis*
+  from the energy model (BORE = how the runqueue orders/preempts; energy model = where tasks are placed),
+  so not redundant — but pursue ONLY if DT tuning plateaus and pick/preempt responsiveness is worth
+  rebuilding the scheduler base. (AGNI is sm6150 vs our sm7150/sdmsteppe too — not a drop-in.)
 
 ## 🚫 Don't bother
 - More peak-perf config knobs — v1.0 proved it's a benchmark wash; the touch-boost lever is already in.

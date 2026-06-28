@@ -78,6 +78,23 @@ Why not 3DMark/Geekbench/AnTuTu: 3DMark is GPU-bound (kernel-CPU changes don't t
 ramp straight to max freq where boost/core_ctl don't matter — all three are insensitive to these knobs and
 not scriptable. PCMark Work is the only commercial app worth a manual sanity check.
 
+## Battery-per-fixed-workload — `benchbatt.sh` (the efficiency lever)
+The latency/throughput benches read "wash" because SilkXotic's efficiency knobs (and the v1.1 DT energy
+model) trade *power*, not speed. This is the measurement that can actually show a win: run an **identical**
+fixed workload (loadbench sustained) and measure **charge consumed** (Δ`charge_counter`, µAh) + energy (µWh).
+Lower µAh for the same `work_s` = more efficient.
+
+```bash
+# same flash-bench-flash-bench flow; compares stock vs silkxotic for the SAME work
+SUS_S=180 ITERS=3 ./benchbatt.sh                            # auto-tags by kernel -> results/batt-<tag>-<ts>.jsonl
+```
+**Hard requirement — adb-shell root.** We measure over USB (which charges), so the harness *stops charge
+input* (`input_suspend`/`charging_enabled`, root) and **verifies** `charge_counter` stops rising before
+recording — no clean stop ⇒ it aborts (a confounded battery number is worse than none). The `power_supply`
+nodes are SELinux-gated from plain adb shell, so it runs everything via KSU `su` under **Enforcing** (NOT
+Permissive — that perturbs power). One-time setup: KernelSU-Next manager → Superuser → grant root to
+**Shell/ADB**. Controls: screen brightness pinned, airplane mode on, same cooldown temp band per iter.
+
 ## Optional: rooted instrumentation tier
 With KSU root you can additionally *log* that the knobs engage under load (read `cpu_boost`/`core_ctl`
 params, per-cluster freq residency). Note: for latency-under-load and sustained-throttle you should **not**
