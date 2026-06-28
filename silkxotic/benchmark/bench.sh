@@ -44,7 +44,9 @@ W="${SIZE%x*}"; H="${SIZE#*x}"
 X=$((W/2)); Y1=$((H*78/100)); Y2=$((H*25/100))
 echo "   screen ${W}x${H}; swipe x=$X y:$Y1<->$Y2"
 
-thermal_max(){ A 'm=0; for f in /sys/class/thermal/thermal_zone*/temp; do v=$(cat "$f" 2>/dev/null); [ -n "$v" ] && [ "$v" -gt "$m" ] 2>/dev/null && m=$v; done; echo $m'; }
+# max of the real CPU die sensors (cpu-*-usr). Excludes virtual zones like lmh-dcvs-*
+# which are pinned at a constant 75C and would otherwise poison the cooldown gate.
+thermal_max(){ A 'm=0; for d in /sys/class/thermal/thermal_zone*; do case "$(cat "$d/type" 2>/dev/null)" in cpu-*-usr) v=$(cat "$d/temp" 2>/dev/null); [ -n "$v" ] && [ "$v" -gt "$m" ] 2>/dev/null && m=$v;; esac; done; echo $m'; }
 battery(){ A dumpsys battery | sed -n 's/^ *\(level\|temperature\|status\): \(.*\)/\1=\2/p' | paste -sd, -; }
 
 cooldown(){
