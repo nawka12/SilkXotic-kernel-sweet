@@ -4,6 +4,9 @@ Reproducible, thermal-controlled, noise-aware comparison of **stock crDroid** vs
 *same* device/ROM/apps — so the only variable is the kernel. No bullshit single-number claims: every
 metric is multi-iteration, reported as median ± IQR, and only called a win when the shift beats the noise.
 
+> **Already ran it?** See [`RESULTS.md`](RESULTS.md) for the honest 2026-06-28 findings (TL;DR: it's a
+> measured wash — and *why* that's expected). Raw data in [`results-published/`](results-published/).
+
 ## Why these metrics
 SilkXotic changes 6 knobs; the suite targets exactly what they affect:
 
