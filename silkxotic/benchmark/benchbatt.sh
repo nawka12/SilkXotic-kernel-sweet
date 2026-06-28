@@ -42,7 +42,9 @@ CC="$(SU "for p in $PS/battery/charge_counter $PS/bms/charge_counter; do [ -f \$
 VOLT="$(SU "for p in $PS/battery/voltage_now $PS/bms/voltage_now; do [ -f \$p ] && { echo \$p; break; }; done")"
 CURR="$(SU "for p in $PS/battery/current_now $PS/bms/current_now; do [ -f \$p ] && { echo \$p; break; }; done")"
 [ -n "$CC" ] || die "no charge_counter node found — can't measure coulombs on this device."
+BATDIR="$(dirname "$CC")"; STATUS="$BATDIR/status"
 rd(){ SU "cat $1" | tr -dc '0-9-'; }                                  # read int from a node (root)
+rds(){ SU "cat $1"; }                                                 # read string (status)
 
 echo "== benchbatt == cc=$CC volt=${VOLT:-none} root=$HAS_ROOT selinux=$(A getenforce)"
 
@@ -72,10 +74,19 @@ restore_charge(){
 cleanup(){ restore_charge; A "settings put system screen_brightness_mode 1" >/dev/null; A 'svc power stayon false' >/dev/null; echo "   (charging restored)"; }
 trap cleanup EXIT INT TERM
 
-verify_not_charging(){  # charge_counter must NOT rise over a short idle window
-  local a b; a="$(rd "$CC")"; sleep 6; b="$(rd "$CC")"
-  echo "   charge_counter $a -> $b over 6s (want non-increasing)"
-  [ -n "$a" ] && [ -n "$b" ] && [ "$b" -le "$a" ] 2>/dev/null
+verify_not_charging(){  # status is the instant, reliable signal (charge_counter is coarse/laggy)
+  local st a b; st="$(rds "$STATUS")"
+  echo "   battery status = '$st' (want: Discharging / Not charging)"
+  case "$st" in
+    *harging) ;;                                   # "Discharging" -> ok (matches via the rise check below too)
+  esac
+  # hard reject if framework/HW still reports active charge, or if counter is climbing
+  case "$st" in Charging|Full) echo "   -> still charging"; return 1;; esac
+  a="$(rd "$CC")"; sleep 6; b="$(rd "$CC")"
+  if [ -n "$a" ] && [ -n "$b" ] && [ "$b" -gt "$a" ] 2>/dev/null; then
+    echo "   -> charge_counter rising ($a->$b)"; return 1
+  fi
+  return 0
 }
 
 # ---- environment / controls ----
@@ -85,7 +96,28 @@ elif echo "$KVER" | grep -q -- "-perf";  then AUTOTAG=stock-perf
 else AUTOTAG="$(A uname -r | tr -c 'A-Za-z0-9._-' '_')"; fi
 TAG="${1:-$AUTOTAG}"; TS="$(date +%Y%m%d-%H%M%S)"; OUT="$RESDIR/batt-${TAG}-${TS}.jsonl"
 
+[ -n "$CURR" ] || die "no current_now node — can't integrate (this BMS's charge_counter is too coarse; see below)."
 adb push "$BIN" /data/local/tmp/loadbench >/dev/null; A chmod 755 /data/local/tmp/loadbench
+
+# On-device concurrent sampler + workload. charge_counter is quantized to whole-% SoC (~50mAh)
+# on this BMS, so it reads 0 for <~2min workloads. current_now updates fast, so we integrate it:
+# sample (uptime current voltage) ~1Hz DURING loadbench, then integrate Q=Σi·dt on the host.
+# Run as root (current_now is SELinux-gated); placement differs from a foreground app but is
+# identical across A/B, so the relative efficiency comparison holds.
+RUNNER="$(mktemp)"; cat > "$RUNNER" <<'DEV'
+#!/system/bin/sh
+LAT=$1; SUS=$2; IV=$3; CURR=$4; VOLT=$5; F=/data/local/tmp
+rm -f $F/bs.txt $F/lb.json; : > $F/bs.run
+( while [ -f $F/bs.run ]; do
+    u=$(cut -d' ' -f1 /proc/uptime); i=$(cat "$CURR" 2>/dev/null); v=$(cat "$VOLT" 2>/dev/null)
+    [ -n "$i" ] && echo "$u $i ${v:-0}"; sleep 1
+  done > $F/bs.txt ) &
+sp=$!
+$F/loadbench $LAT $SUS $IV > $F/lb.json 2>/dev/null
+rm -f $F/bs.run; wait $sp 2>/dev/null
+DEV
+adb push "$RUNNER" /data/local/tmp/batt_run.sh >/dev/null; A chmod 755 /data/local/tmp/batt_run.sh; rm -f "$RUNNER"
+
 A input keyevent KEYCODE_WAKEUP >/dev/null; A svc power stayon true >/dev/null
 A "settings put system screen_brightness_mode 0" >/dev/null      # auto-brightness OFF
 A "settings put system screen_brightness $BRIGHT" >/dev/null     # fixed brightness (constant offset, cancels in A/B)
@@ -102,19 +134,25 @@ cooldown(){ local target=$((COOL_C*1000)) waited=0 t; while :; do t="$(thermal_m
 
 run_iter(){
   local i="$1"; cooldown
-  local cc0 cc1 v0 v1 t0 t1 up0 up1 lb dcc dwh secs
-  cc0="$(rd "$CC")"; v0="$(rd "$VOLT")"; t0="$(thermal_max)"; up0="$(A cut -d. -f1 /proc/uptime)"
-  lb="$(A "/data/local/tmp/loadbench $LAT_S $SUS_S $IV_S")"           # the fixed workload (emits JSON)
-  cc1="$(rd "$CC")"; v1="$(rd "$VOLT")"; t1="$(thermal_max)"; up1="$(A cut -d. -f1 /proc/uptime)"
-  [ "$i" -eq 0 ] && { echo "   warmup done (discarded)"; return; }
-  dcc=$(( ${cc0:-0} - ${cc1:-0} ))                                   # µAh consumed (counter decreases on discharge)
-  secs=$(( ${up1:-0} - ${up0:-0} ))
-  # energy µWh = µAh * avg V(µV)/1e6 ; integer math, keep µWh
-  local vavg=$(( (${v0:-0} + ${v1:-0}) / 2 ))
-  dwh=$(( dcc * vavg / 1000000 ))
-  printf '{"tag":"%s","iter":%d,"ts":"%s","charge_stop":"%s","airplane":"%s","work_s":%d,"d_charge_uAh":%d,"d_energy_uWh":%d,"v_uV":[%d,%d],"thermal_mC":[%d,%d],"load":%s}\n' \
-    "$TAG" "$i" "$(date +%H:%M:%S)" "$CHG_METHOD" "$AIRPLANE" "$secs" "$dcc" "$dwh" "${v0:-0}" "${v1:-0}" "${t0:-0}" "${t1:-0}" "$lb" >> "$OUT"
-  echo "   iter $i/$ITERS: ${dcc} µAh / ${dwh} µWh over ${secs}s  ($((${t0:-0}/1000))->$((${t1:-0}/1000))C)"
+  stop_charge; verify_not_charging || die "charging resumed before iter $i (method '$CHG_METHOD'); refusing confounded sample."
+  local cc0 cc1 t0 t1 lb samp uAh uWh nsamp imean ccdelta
+  cc0="$(rd "$CC")"; t0="$(thermal_max)"
+  SU "/data/local/tmp/batt_run.sh $LAT_S $SUS_S $IV_S $CURR $VOLT" >/dev/null   # sampler + workload (blocks)
+  cc1="$(rd "$CC")"; t1="$(thermal_max)"
+  lb="$(SU 'cat /data/local/tmp/lb.json')"
+  samp="$(SU 'cat /data/local/tmp/bs.txt')"
+  [ "$i" -eq 0 ] && { echo "   warmup done ($(echo "$samp" | grep -c .) samples, discarded)"; return; }
+  # integrate Q=Σ|i|·dt (µAh) and E=Σ|i·v|·dt (µWh) over the sampled current/voltage trace
+  set -- $(printf '%s\n' "$samp" | awk '
+    NR>1 && $1>pu { dt=$1-pu; ii=(pi<0?-pi:pi); vv=(pv<0?-pv:pv); q+=ii*dt; e+=ii*vv*dt; n++ }
+    { pu=$1; pi=$2; pv=$3 }
+    END { printf "%d %d %d", q/3600, e/3600/1000000, n+1 }')
+  uAh="${1:-0}"; uWh="${2:-0}"; nsamp="${3:-0}"
+  ccdelta=$(( ${cc0:-0} - ${cc1:-0} ))                               # coarse counter delta (sanity; ~0 for short runs)
+  imean=$(( nsamp>0 ? uAh*3600/(SUS_S>0?SUS_S:1) : 0 ))             # rough mean discharge current µA
+  printf '{"tag":"%s","iter":%d,"ts":"%s","charge_stop":"%s","airplane":"%s","work_s":%d,"charge_uAh":%d,"energy_uWh":%d,"mean_uA":%d,"n_samp":%d,"cc_delta_uAh":%d,"thermal_mC":[%d,%d],"load":%s}\n' \
+    "$TAG" "$i" "$(date +%H:%M:%S)" "$CHG_METHOD" "$AIRPLANE" "$SUS_S" "$uAh" "$uWh" "$imean" "$nsamp" "$ccdelta" "${t0:-0}" "${t1:-0}" "$lb" >> "$OUT"
+  echo "   iter $i/$ITERS: ${uAh} µAh / ${uWh} µWh  (~${imean}µA, ${nsamp} samp)  $((${t0:-0}/1000))->$((${t1:-0}/1000))C"
 }
 
 echo "-- warmup --"; run_iter 0

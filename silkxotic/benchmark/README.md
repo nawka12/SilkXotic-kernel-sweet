@@ -81,8 +81,14 @@ not scriptable. PCMark Work is the only commercial app worth a manual sanity che
 ## Battery-per-fixed-workload — `benchbatt.sh` (the efficiency lever)
 The latency/throughput benches read "wash" because SilkXotic's efficiency knobs (and the v1.1 DT energy
 model) trade *power*, not speed. This is the measurement that can actually show a win: run an **identical**
-fixed workload (loadbench sustained) and measure **charge consumed** (Δ`charge_counter`, µAh) + energy (µWh).
-Lower µAh for the same `work_s` = more efficient.
+fixed workload (loadbench sustained) and measure **charge consumed** (µAh) + energy (µWh). Lower for the
+same `work_s` = more efficient.
+
+How it measures: this BMS's `charge_counter` is quantized to whole-% SoC (~50 mAh), so it reads 0 for
+<~2 min workloads — useless for short A/B runs. Instead the harness **integrates `current_now`** (Q=Σi·dt)
+sampled ~1 Hz *during* the workload (kept as `cc_delta_uAh` is the coarse counter, for sanity). Absolute
+Wh depends on how the gauge reports current (some lightly smooth it), but A and B are measured identically
+so the **comparison is valid**. Validated live: a 60 s all-core load read ~8.5 mAh / ~2.2 W (self-consistent).
 
 ```bash
 # same flash-bench-flash-bench flow; compares stock vs silkxotic for the SAME work
