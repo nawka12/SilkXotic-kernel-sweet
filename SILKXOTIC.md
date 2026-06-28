@@ -51,6 +51,9 @@ A reproducible A/B harness lives in [`silkxotic/benchmark/`](silkxotic/benchmark
 (frame jank, app-launch latency, CPU microbench), thermal-controlled, multi-iteration, with a noise-aware
 comparison so the numbers aren't bullshit. See `silkxotic/benchmark/README.md`.
 
+## What's next
+Plans for the next version (v1.1 "Charmeuse" and beyond): [`silkxotic/ROADMAP.md`](silkxotic/ROADMAP.md).
+
 ## Credits
 - **Tuning DNA:** BruthXotic / *Tobrut Exotic* — **Morat Engine**, by **@MasMasBertelur**.
 - **Base / upstream:** crDroid (`android_kernel_xiaomi_sm6150`, `16.0`).
