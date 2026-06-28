@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 240" width="900" height="240" role="img" aria-label="SilkXotic">
+  <defs>
+    <linearGradient id="silk" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ECEEF3"/>
+      <stop offset="0.55" stop-color="#C9A6CE"/>
+      <stop offset="1" stop-color="#E0218A"/>
+    </linearGradient>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1C1714"/>
+      <stop offset="1" stop-color="#100D0B"/>
+    </linearGradient>
+  </defs>
+
+  <!-- emblem tile -->
+  <rect x="20" y="20" width="200" height="200" rx="46" fill="url(#tile)" stroke="#2A2320" stroke-width="2"/>
+
+  <!-- silk-ribbon S -->
+  <path d="M168 84 C168 62 130 58 110 58 C82 58 70 80 70 98
+           C70 122 98 128 120 132 C144 136 170 142 170 164
+           C170 186 140 190 116 190 C95 190 76 184 70 166"
+        fill="none" stroke="url(#silk)" stroke-width="24"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- sheen highlight -->
+  <path d="M168 84 C168 62 130 58 110 58 C90 58 78 70 73 82"
+        fill="none" stroke="#FFFFFF" stroke-opacity="0.55" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- wordmark -->
+  <g font-family="Poppins, Montserrat, Segoe UI, Arial, sans-serif" font-weight="800" font-size="92" letter-spacing="2">
+    <text x="262" y="138" fill="#ECEEF3">SILK</text>
+    <text x="262" y="138" fill="#E0218A" dx="232">XOTIC</text>
+  </g>
+
+  <!-- silk-wave underline -->
+  <path d="M264 162 C320 146 360 178 420 162 C480 146 520 178 600 162 C660 150 700 176 770 160"
+        fill="none" stroke="url(#silk)" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- tagline -->
+  <text x="266" y="196" font-family="JetBrains Mono, Consolas, monospace" font-size="22"
+        letter-spacing="3" fill="#9AA1AD">exotic tuning, silk finish</text>
+</svg>
