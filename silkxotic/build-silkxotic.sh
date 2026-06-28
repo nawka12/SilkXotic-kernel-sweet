@@ -28,12 +28,15 @@ CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-gnu-"
 
 V="arch/arm64/configs/vendor"
 echo ">>> $(date)  clang: $(clang --version | head -1)"
-echo ">>> .config = sdmsteppe-perf + sweet + silkxotic-opts + buildhost-lowram + silkxotic-brand"
+echo ">>> .config = sdmsteppe-perf + sweet + silkxotic-opts + silkxotic-slim + silkxotic-zram-zstd + silkxotic-net-bbr + buildhost-lowram + silkxotic-brand"
 rm -rf "$OUT" && mkdir -p "$OUT"
 ARCH=arm64 bash scripts/kconfig/merge_config.sh -O "$OUT" \
   "$V/sdmsteppe-perf_defconfig" \
   "$V/sweet.config" \
   "$V/silkxotic-opts.config" \
+  "$V/silkxotic-slim.config" \
+  "$V/silkxotic-zram-zstd.config" \
+  "$V/silkxotic-net-bbr.config" \
   "$V/buildhost-lowram.config" \
   "$V/silkxotic-brand.config"
 
