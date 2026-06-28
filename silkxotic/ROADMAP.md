@@ -13,9 +13,18 @@ scheduler tuning** — plus actually *measuring* the touch-feel the kernel is br
 - **zram: lz4 → zstd** (+ keep writeback). Better ratio on 6 GB; cheap, real-world fewer-reclaim-stalls.
   Enable `CONFIG_CRYPTO_ZSTD=y`, set zram default comp to zstd. A/B refault rates + `dumpsys meminfo`.
 - **TCP BBR** (`cubic → bbr` + `fq` qdisc). `CONFIG_TCP_CONG_BBR=y`, `NET_SCH_FQ=y`. Cheap latency/throughput win.
-- **Source-level EAS / stune tuning** — the *real* perceived-smoothness lever on 4.14 (bigger than any
-  config flag). Tune WALT `sched_*`, stune top-app boost + prefer-idle, schedutil up/down rate limits.
-  This is where "feels smoother" actually comes from. Validate with the heavy latency-under-load suite.
+- **Source-level scheduler tuning that actually sticks.** ⚠️ Knob-tuning is a dead end for our
+  packaging: an on-device probe (2026-06-28, running v1.0 build) showed crDroid's init rewrites *every*
+  sched/stune/schedutil knob at boot — `sched_latency` 6→10ms, `min_granularity` 0.75→3ms,
+  `tunable_scaling` 1→0, stune top-app `boost` 0→10 / `prefer_idle` 0→1, schedutil `down_rate_limit`
+  500→20000us — so changing compiled defaults does nothing from an Image.gz-only kernel that keeps
+  crDroid's ramdisk. (Proof: WALT-migrate/stune/schedutil writes are verbatim in
+  `/vendor/bin/init.qcom.post_boot.sh`; the CFS latency knobs come from the perf-HAL, proven by
+  elimination — the kernel compiles `tunable_scaling=1`/`latency=6ms` and nothing in scripts/cmdline/dts
+  produces the live `0`/10ms, so userspace must.) The levers that DO stick (no userspace override surface): (a) `kernel/sched/features.h`
+  SCHED_FEAT toggles — low-risk but small; (b) a BORE/CASS-style **algorithm** port (see 🧪) — the only
+  thing that meaningfully moves "feel". Validate with the heavy latency-under-load suite + subjective
+  touch-feel. (Knobs were the easy path the roadmap assumed; the probe proved they're gone.)
 - **Strip debug overhead.** The shipped build still carries `DEBUG_INFO=y` / `DEBUG_KERNEL=y` /
   `SCHED_DEBUG=y` / `FTRACE=y` / `STACKTRACE=y` (inherited from `sdmsteppe-perf_defconfig`; the tree's
   `disable_dbgfs.sh` only strips `DEBUG_FS`/`PAGE_OWNER` for `user` builds, and crDroid's `perf` path
@@ -62,8 +71,16 @@ scheduler tuning** — plus actually *measuring* the touch-feel the kernel is br
   needs a build host with ≥12 GB RAM (the 7.5 GB host can't link it).
 - **MGLRU backport** (`LRU_GEN`) — meaningful reclaim win on 6 GB, but invasive to backport to 4.14.
 - **uclamp backport** (`CONFIG_UCLAMP_TASK`, confirmed absent on this tree). Modern util-clamp on top of
-  WALT — but the stune tuning in 🥇 likely captures most of the perceived win for far less risk; only
-  do this if stune tops out. Same effort/risk tier as the MGLRU backport (real source work, not a flag).
+  WALT. Caveat: uclamp.min/max are *also* a userspace-set surface (cgroup cpu controller + per-task
+  `sched_setattr`), so like the sched knobs it's liable to be overridden by init — verify it actually
+  sticks before investing. Same effort/risk tier as the MGLRU backport (real source work, not a flag).
+- **BORE / CASS scheduler port** — the real source-level "feel" lever now that knob-tuning is proven
+  override-dead (see 🥇). AGNI Reborn (`manipvlator/los_kernel_xiaomi_sm6150`) ships BORE + CASS on the
+  *same* 4.14.357 base, so it's portable in principle — but it's a hot-path **algorithm** swap (BORE =
+  CFS vruntime/pick rework, "better responsive touch"; CASS removes WALT entirely, which our v1.0 knob
+  set is built around) and AGNI is sm6150 vs our sm7150/sdmsteppe — not a drop-in. Medium-high risk; do
+  it as its own experimental build, validate by flash + heavy suite + subjective feel. The only
+  scheduler-behavior change that init can't override.
 
 ## 🚫 Don't bother
 - More peak-perf config knobs — v1.0 proved it's a benchmark wash; the touch-boost lever is already in.
@@ -72,6 +89,12 @@ scheduler tuning** — plus actually *measuring* the touch-feel the kernel is br
 - **Feature fluff other sweet kernels ship** (KCAL/display-color, sound control, USB fastcharge,
   double-tap-to-wake, frandom). Against the "zero bloat, nothing else disturbed" brand; each is a
   driver backport + maintenance surface for no smoothness/efficiency gain. Leave them out.
+- **Tuning WALT `sched_*` / stune boost / schedutil rate limits via kernel defaults** — measured dead
+  (on-device probe 2026-06-28): crDroid's init overrides all of them at boot, so compiled-default changes
+  never apply from our Image.gz-only packaging. To change scheduler behavior either swap the *algorithm*
+  (🧪 BORE/CASS) or ship the knobs via a mechanism we don't have (init.d / vendor overlay) — which breaks
+  the "nothing disturbed" brand. (`net` defaults and zram `comp_algorithm` DO stick — those aren't knobs
+  init touches — which is why the v1.1 BBR+fq and zram-zstd changes are valid.)
 
 ## 🔁 Process for every release
 0. **Safety first** — `sweet` is A-only (no fallback slot): keep a known-good stock `boot.img` to
