@@ -21,10 +21,15 @@ scheduler tuning** — plus actually *measuring* the touch-feel the kernel is br
   crDroid's ramdisk. (Proof: WALT-migrate/stune/schedutil writes are verbatim in
   `/vendor/bin/init.qcom.post_boot.sh`; the CFS latency knobs come from the perf-HAL, proven by
   elimination — the kernel compiles `tunable_scaling=1`/`latency=6ms` and nothing in scripts/cmdline/dts
-  produces the live `0`/10ms, so userspace must.) The levers that DO stick (no userspace override surface): (a) `kernel/sched/features.h`
-  SCHED_FEAT toggles — low-risk but small; (b) a BORE/CASS-style **algorithm** port (see 🧪) — the only
-  thing that meaningfully moves "feel". Validate with the heavy latency-under-load suite + subjective
-  touch-feel. (Knobs were the easy path the roadmap assumed; the probe proved they're gone.)
+  produces the live `0`/10ms, so userspace must.) The levers that DO stick (no userspace override surface):
+  (a) **DT EAS energy model** — `sched-energy-costs` + capacities in `sdmmagpie.dtsi` (the base dtb),
+  read once at boot with no runtime knob, so it can't be overridden. **PROVEN in v1.1 Charmeuse**: a
+  little-cluster top-OPP cost tweak (130→145 / 148→175) built, diff-verified byte-clean vs stock,
+  shipped as AK3's `dtb`, flashed, and read back live on-device (`0x91`/`0xaf`). This is *the* on-brand
+  sticky lever. (b) `kernel/sched/features.h` SCHED_FEAT toggles — low-risk but small; (c) a BORE/CASS
+  **algorithm** port (see 🧪). Validate with the heavy latency-under-load suite + subjective touch-feel
+  + battery-per-workload. (Knobs were the easy path the roadmap assumed; the probe killed them — the DT
+  energy model is the way.)
 - **Strip debug overhead.** The shipped build still carries `DEBUG_INFO=y` / `DEBUG_KERNEL=y` /
   `SCHED_DEBUG=y` / `FTRACE=y` / `STACKTRACE=y` (inherited from `sdmsteppe-perf_defconfig`; the tree's
   `disable_dbgfs.sh` only strips `DEBUG_FS`/`PAGE_OWNER` for `user` builds, and crDroid's `perf` path
@@ -93,8 +98,11 @@ scheduler tuning** — plus actually *measuring* the touch-feel the kernel is br
   (on-device probe 2026-06-28): crDroid's init overrides all of them at boot, so compiled-default changes
   never apply from our Image.gz-only packaging. To change scheduler behavior either swap the *algorithm*
   (🧪 BORE/CASS) or ship the knobs via a mechanism we don't have (init.d / vendor overlay) — which breaks
-  the "nothing disturbed" brand. (`net` defaults and zram `comp_algorithm` DO stick — those aren't knobs
-  init touches — which is why the v1.1 BBR+fq and zram-zstd changes are valid.)
+  the "nothing disturbed" brand. (`net` defaults DO stick — confirmed live on v1.1: `bbr`/`fq` active.
+  But zram `comp_algorithm` does **NOT** — `init.qcom.post_boot.sh:299` writes `lz4`, caught when v1.1
+  booted with a zstd compiled default yet still ran `[lz4]`; devfreq DDR/L3 bandwidth is post_boot-written
+  too. So of the v1.1 changes, debug-trim + BBR/fq are real wins and zram-zstd is a no-op as shipped —
+  the DT energy model (🥇) is the lever that actually moved.)
 
 ## 🔁 Process for every release
 0. **Safety first** — `sweet` is A-only (no fallback slot): keep a known-good stock `boot.img` to
