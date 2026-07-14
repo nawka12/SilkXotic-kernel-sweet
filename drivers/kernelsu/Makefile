@@ -2,6 +2,7 @@ kernelsu-objs := core/init.o
 
 kernelsu-objs += compat/kernel_compat.o
 kernelsu-objs += feature/kernel_umount.o
+kernelsu-objs += feature/sulog.o
 kernelsu-objs += feature/sucompat.o
 
 kernelsu-objs += hook/hook_manager.o
@@ -11,6 +12,7 @@ kernelsu-objs += extras.o
 kernelsu-objs += tiny_sulog.o
 
 kernelsu-objs += infra/file_wrapper.o
+kernelsu-objs += infra/event_queue.o
 kernelsu-objs += infra/seccomp_cache.o
 kernelsu-objs += infra/su_mount_ns.o
 
@@ -31,9 +33,14 @@ kernelsu-objs += selinux/selinux.o
 kernelsu-objs += selinux/rules.o
 kernelsu-objs += selinux/sepolicy.o
 
+kernelsu-objs += sulog/event.o
+kernelsu-objs += sulog/fd.o
+
 kernelsu-objs += supercall/dispatch.o
 kernelsu-objs += supercall/perm.o
 kernelsu-objs += supercall/supercall.o
+
+kernelsu-objs += feature/adb_root.o
 
 ifdef KBUILD_EXTMOD
 ifeq ($(CONFIG_KSU_DISABLE_MANAGER),y)
@@ -63,14 +70,16 @@ obj-$(CONFIG_KSU) += kernelsu.o
 LPATH := /usr/bin/env PATH="$$PATH":/usr/bin:/usr/local/bin
 MDIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
-KSU_GIT_VERSION := 3131
-KSU_GIT_TAG := v3.2.0
+# Check if this is a git repository
+# Try to detect Git repo intelligently
+KSU_GIT_VERSION := 3215
+KSU_GIT_TAG := v3.3.0
 KSU_GIT_VERSION_VALID := 1
 
 # Calculate version if git version is available
 ifdef KSU_GIT_VERSION_VALID
 # ksu_version: major * 30000 + git version for historical reasons
-$(eval KSU_VERSION=$(shell expr 30000 + $(KSU_GIT_VERSION) + 150))
+$(eval KSU_VERSION=$(shell expr 30000 + $(KSU_GIT_VERSION) + 200))
 $(info -- KernelSU-Next version: $(KSU_VERSION))
 ccflags-y += -DKSU_VERSION=$(KSU_VERSION)
 else
@@ -246,6 +255,12 @@ ccflags-y += -DKSU_COMPAT_HAS_EXPORTED_POLICY_RWLOCK
 endif
 ifeq ($(shell grep -q "cpus_ptr;" $(srctree)/include/linux/sched.h; echo $$?),0)
 ccflags-y += -DKSU_COMPAT_HAS_BACKPORTED_CPUS_PTR
+endif
+
+# fallthrough check for allowlist v2
+ifneq ($(shell [ -f $(srctree)/include/linux/compiler_attributes.h ] && grep -q "define fallthrough" $(srctree)/include/linux/compiler_attributes.h; echo $$?),0)
+$(info -- KSU_NEXT: fallthrough in compiler_attributes.h not found)
+ccflags-y += -DKSU_ALLOWLIST_DOES_NOT_HAVE_FALLTHROUGH
 endif
 
 # Handle optional backports
