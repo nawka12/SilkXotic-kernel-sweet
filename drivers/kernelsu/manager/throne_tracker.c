@@ -405,11 +405,15 @@ void track_throne(bool prune_only)
 		return;
 	}
 
-	// For asynchronous runs, if a work is already pending, canceling it
-	// ensures we don't clobber the prune_only state while it's waiting.
-	cancel_delayed_work_sync(&throne_data.dwork);
+	// NEVER flush/wait here: callers can be inside vfs_rename (fsnotify/LSM
+	// hooks) holding the parent dir i_rwsem while the worker blocks in
+	// filp_open(packages.list) on that same lock — a sync cancel deadlocks
+	// (unkillable D-state PackageManager thread, frozen device). Async
+	// cancel is sufficient: a mid-run worker finishes with the old
+	// prune_only, and the run queued below applies the new state.
+	cancel_delayed_work(&throne_data.dwork);
 
-	// Update state safely and queue the new work
+	// Update state and queue the new work
 	throne_data.prune_only = prune_only;
 	throne_data.retries = 0;
 	schedule_delayed_work(&throne_data.dwork, 0);
