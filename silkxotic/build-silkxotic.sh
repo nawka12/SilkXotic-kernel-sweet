@@ -27,25 +27,38 @@ OBJDUMP=llvm-objdump STRIP=llvm-strip READELF=llvm-readelf \
 CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-gnu-"
 
 V="arch/arm64/configs/vendor"
+
+# Full LTO's final link needs ~8-12 GB. Set LOWRAM=1 on hosts that can't afford that
+# (the 8 GB laptop) to drop to ThinLTO; hosts with the RAM keep crDroid's full LTO.
+LOWRAM="${LOWRAM:-0}"
+CONFIGS=(
+  "$V/sdmsteppe-perf_defconfig"
+  "$V/sweet.config"
+  "$V/silkxotic-opts.config"
+  "$V/silkxotic-slim.config"
+  "$V/silkxotic-zram-zstd.config"
+  "$V/silkxotic-net-bbr.config"
+)
+if [ "$LOWRAM" = 1 ]; then
+  CONFIGS+=( "$V/buildhost-lowram.config" )
+  LTO_MODE="ThinLTO (LOWRAM=1)"
+else
+  LTO_MODE="full LTO"
+fi
+CONFIGS+=( "$V/silkxotic-brand.config" )
+
 echo ">>> $(date)  clang: $(clang --version | head -1)"
-echo ">>> .config = sdmsteppe-perf + sweet + silkxotic-opts + silkxotic-slim + silkxotic-zram-zstd + silkxotic-net-bbr + buildhost-lowram + silkxotic-brand"
+echo ">>> LTO: $LTO_MODE"
+echo ">>> .config = ${CONFIGS[*]//$V\//}"
 rm -rf "$OUT" && mkdir -p "$OUT"
-ARCH=arm64 bash scripts/kconfig/merge_config.sh -O "$OUT" \
-  "$V/sdmsteppe-perf_defconfig" \
-  "$V/sweet.config" \
-  "$V/silkxotic-opts.config" \
-  "$V/silkxotic-slim.config" \
-  "$V/silkxotic-zram-zstd.config" \
-  "$V/silkxotic-net-bbr.config" \
-  "$V/buildhost-lowram.config" \
-  "$V/silkxotic-brand.config"
+ARCH=arm64 bash scripts/kconfig/merge_config.sh -O "$OUT" "${CONFIGS[@]}"
 
 make O="$OUT" ARCH=arm64 $TOOLS olddefconfig
 
 echo ">>> sanity: SilkXotic knobs + LTO mode + brand"
 grep -E "CONFIG_(CPU_BOOST|SCHED_CORE_CTL|MSM_PERFORMANCE|SCHED_AUTOGROUP|BALANCE_ANON_FILE_RECLAIM|SLUB_CPU_PARTIAL|LTO_CLANG|THINLTO|LOCALVERSION)=" "$OUT/.config" | sort
 
-echo ">>> building Image.gz (-j$JOBS, ThinLTO)  $(date +%T)"
+echo ">>> building Image.gz (-j$JOBS, $LTO_MODE)  $(date +%T)"
 make O="$OUT" ARCH=arm64 $TOOLS -j"$JOBS" Image.gz
 
 # Base dtb carries the EAS energy model (sdmmagpie.dtsi). We ship a value-only-edited
