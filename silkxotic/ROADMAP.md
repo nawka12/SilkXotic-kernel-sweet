@@ -104,7 +104,16 @@ scheduler tuning** — plus actually *measuring* the touch-feel the kernel is br
   rebuilding the scheduler base. (AGNI is sm6150 vs our sm7150/sdmsteppe too — not a drop-in.)
 
 ## 🚫 Don't bother
-- More peak-perf config knobs — v1.0 proved it's a benchmark wash; the touch-boost lever is already in.
+- More peak-perf config knobs — v1.0 proved it's a benchmark wash.
+- **`CPU_BOOST` and `MSM_PERFORMANCE` as shipped** — both are *dormant* on crDroid, confirmed live
+  2026-09-04: `input_boost_freq` is all zeros on a running v1.1.2 and nothing ever arms it (no
+  `init.qcom.post_boot.sh` write, no device-tree property, no Power HAL path). Touch responsiveness on
+  stock and on SilkXotic alike comes from `powerhint.json`, which sets `scaling_min_freq` + a stune
+  top-app boost — not from `cpu_boost`. `MSM_PERFORMANCE` is inert unconditionally. The old
+  "touch-triggered, therefore unmeasurable" explanation for the v1.0 wash is **retired**: the knob was
+  never armed, so there was nothing to measure. Enabling them costs nothing but buys nothing either —
+  the only way they become real is a compiled-in default (🧪 v1.2.0 `CPU_BOOST_INPUT_FREQ_DEFAULT`
+  experiment). If that A/B does not win, drop both from the config and the pitch.
 - GKI port — impractical on SM7150 (no QC 5.x BSP; full driver port; likely-broken camera/modem).
 - `-O3`/Polly/compiler hacks — rarely net-positive on phones, not worth the risk.
 - **Feature fluff other sweet kernels ship** (KCAL/display-color, sound control, USB fastcharge,
