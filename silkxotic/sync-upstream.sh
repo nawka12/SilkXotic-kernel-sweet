@@ -15,12 +15,22 @@
 #      only — the working tree, our WIP, untracked files and the pile of
 #      git-ignored kernel build artifacts on disk are all left alone).
 #
-# Our customizations live on a disjoint set of paths (silkxotic/, the
+# Our customizations live on a disjoint set of paths: silkxotic/, the
 # vendor/silkxotic-*.config + buildhost-lowram.config fragments, SILKXOTIC.md,
-# .gitignore, and the in-tree edits to drivers/block/zram/zram_drv.c and
-# arch/arm64/boot/dts/qcom/sdmmagpie.dtsi), so the merge is normally
-# conflict-free. If upstream ever edits a file we also patched, the script
-# STOPS and lists it rather than silently clobbering our change.
+# .gitignore, plus these in-tree patched files (keep this list current — it is
+# the set the collision check below actually protects):
+#
+#     drivers/block/zram/zram_drv.c
+#     arch/arm64/boot/dts/qcom/sdmmagpie.dtsi      (v1.1 EAS energy model)
+#     drivers/kernelsu/manager/throne_tracker.c    (v1.1.2 ABBA deadlock fix)
+#     drivers/kernelsu/policy/allowlist.c          (v1.2.0 pre-v4 profile migration)
+#     drivers/kernelsu/policy/allowlist.h          (v1.2.0 pre-v4 profile migration)
+#     drivers/kernelsu/supercall/dispatch.c        (v1.2.0 pre-v4 profile migration)
+#     drivers/cpufreq/cpu-boost.c                  (v1.2.0 compiled-in boost default)
+#     drivers/cpufreq/Kconfig                      (v1.2.0 compiled-in boost default)
+#
+# so the merge is normally conflict-free. If upstream ever edits a file we also
+# patched, the script STOPS and lists it rather than silently clobbering our change.
 #
 # Usage:  silkxotic/sync-upstream.sh [branch]        (branch defaults to 16.0)
 set -euo pipefail
