@@ -28,7 +28,7 @@ CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-gnu-"
 
 V="arch/arm64/configs/vendor"
 echo ">>> $(date)  clang: $(clang --version | head -1)"
-echo ">>> .config = sdmsteppe-perf + sweet + silkxotic-opts + silkxotic-slim + silkxotic-zram-zstd + silkxotic-net-bbr + buildhost-lowram + silkxotic-brand"
+echo ">>> .config = sdmsteppe-perf + sweet + silkxotic-opts + silkxotic-slim + silkxotic-zram-zstd + silkxotic-net-bbr + silkxotic-hungtask + buildhost-lowram + silkxotic-brand"
 rm -rf "$OUT" && mkdir -p "$OUT"
 ARCH=arm64 bash scripts/kconfig/merge_config.sh -O "$OUT" \
   "$V/sdmsteppe-perf_defconfig" \
@@ -37,13 +37,14 @@ ARCH=arm64 bash scripts/kconfig/merge_config.sh -O "$OUT" \
   "$V/silkxotic-slim.config" \
   "$V/silkxotic-zram-zstd.config" \
   "$V/silkxotic-net-bbr.config" \
+  "$V/silkxotic-hungtask.config" \
   "$V/buildhost-lowram.config" \
   "$V/silkxotic-brand.config"
 
 make O="$OUT" ARCH=arm64 $TOOLS olddefconfig
 
 echo ">>> sanity: SilkXotic knobs + LTO mode + brand"
-grep -E "CONFIG_(CPU_BOOST|SCHED_CORE_CTL|MSM_PERFORMANCE|SCHED_AUTOGROUP|BALANCE_ANON_FILE_RECLAIM|SLUB_CPU_PARTIAL|LTO_CLANG|THINLTO|LOCALVERSION)=" "$OUT/.config" | sort
+grep -E "CONFIG_(CPU_BOOST|SCHED_CORE_CTL|MSM_PERFORMANCE|SCHED_AUTOGROUP|BALANCE_ANON_FILE_RECLAIM|SLUB_CPU_PARTIAL|LTO_CLANG|THINLTO|LOCALVERSION|DETECT_HUNG_TASK|DEFAULT_HUNG_TASK_TIMEOUT)=" "$OUT/.config" | sort
 
 echo ">>> building Image.gz (-j$JOBS, ThinLTO)  $(date +%T)"
 make O="$OUT" ARCH=arm64 $TOOLS -j"$JOBS" Image.gz
