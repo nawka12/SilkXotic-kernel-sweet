@@ -7,9 +7,18 @@ config flags is pointless. The real levers are **efficiency (battery/thermal)** 
 scheduler tuning** — plus actually *measuring* the touch-feel the kernel is branded on.
 
 ## 🥇 Highest value (do first)
-- **Battery-per-fixed-workload A/B.** The one untried measurement, and the most likely place a *real*
-  win exists (`core_ctl`/`msm_performance` trade throughput for efficiency). Harness is ~90% there —
-  add a coulomb-counter (`charge_counter`) test to `benchload.sh`. Needs KSU root.
+- **Battery-per-fixed-workload A/B.** ✅ **DONE 2026-07-04 — and it's a decisive LOSS for v1.1**
+  (`benchbatt.sh`, 3 iters/side, 180 s saturating load, charge-stop verified, md5-verified dd swaps):
+  stock 23,703 µAh vs SilkXotic 32,588 µAh — **+37.5% charge for +4.3% sustained throughput**
+  (µAh-per-work +37.4%, ~15–50× the noise). Mechanism: stock steps down to a sustainable OPP
+  (1813→1694 Miter/s, 93.4% retention), v1.1 holds ~1768 flat (99.5%) and pays ~8× marginal perf/W
+  for the difference. Full writeup in `benchmark/RESULTS.md`; raw data in `results-published/batt-*`.
+  **The efficiency hypothesis for core_ctl/msm_performance is not just unproven — under sustained
+  load the v1.1 stack is measurably the *less* efficient kernel.** Caveat: saturating-load result;
+  light-use drain still unmeasured. **Follow-ups now the highest-value work:** (a) isolate the lever —
+  stock-dtb + SilkXotic-Image hybrid run, and a with/without-`core_ctl` build, same harness;
+  (b) v1.2 "sipping" DT energy-model profile (raise gold top-OPP costs) and re-run;
+  (c) `comparebatt.py` now exists (median ± IQR + throughput-fairness gate).
 - **zram: lz4 → zstd** (+ keep writeback). Better ratio on 6 GB; cheap, real-world fewer-reclaim-stalls.
   Enable `CONFIG_CRYPTO_ZSTD=y`, set zram default comp to zstd. A/B refault rates + `dumpsys meminfo`.
 - **TCP BBR** (`cubic → bbr` + `fq` qdisc). `CONFIG_TCP_CONG_BBR=y`, `NET_SCH_FQ=y`. Cheap latency/throughput win.
@@ -41,7 +50,9 @@ scheduler tuning** — plus actually *measuring* the touch-feel the kernel is br
 
 ## 🥈 Worth investigating
 - **Reconsider `core_ctl`.** v1.0's heavy A/B *hinted* it may cost worst-case latency (noisy, not proven).
-  Do a clean with/without-core_ctl A/B; drop it if it doesn't earn its place in a smoothness build.
+  **2026-07-04: urgency upgraded** — the battery A/B (🥇, done) measured v1.1 at +37% charge under
+  sustained load, and core_ctl/msm_performance are prime suspects alongside the DT edit. Do the clean
+  with/without-core_ctl A/B through `benchbatt.sh`; drop it if it doesn't earn its place.
 - **`SPECULATIVE_PAGE_FAULT` backport** (real source work, not a config flag — it doesn't exist as a
   Kconfig symbol in this tree). Can speed app launch / multithreaded faulting. Medium effort/risk.
 - **Touch-latency measurement.** The thing no headless benchmark captures (and v1.0's whole value prop).
@@ -63,9 +74,10 @@ scheduler tuning** — plus actually *measuring* the touch-feel the kernel is br
   `dirty_background_ratio`, `vfs_cache_pressure` via init.d/sysfs. Pairs with the zstd-zram change (both
   move reclaim behavior); A/B refault rates + `dumpsys meminfo`. Easy to stack on the same test run.
 - **Make the heavy suite actually throttle.** v1.0's heavy run only reached ~52 °C / 99% retention, so
-  `core_ctl`/`msm_performance` had nothing to win. For v1.1, lengthen `SUS_S`, lower `COOL_C`, and add a
-  GPU co-load (hot GLES loop) so the SoC genuinely throttles — otherwise the efficiency knobs stay
-  unmeasurable. Harness work; complements the battery A/B and the core_ctl reconsideration above.
+  `core_ctl`/`msm_performance` had nothing to win. **Partially resolved 2026-07-04:** `SUS_S=180` in
+  `benchbatt.sh` was enough to expose the divergence — stock steps down (93.4% retention), v1.1 doesn't
+  (99.5%) — so the sustained-policy difference IS now measurable without a GPU co-load. Still open if
+  deeper thermal soak matters: GPU co-load + lower `COOL_C` for a true throttle-floor comparison.
 
 ## 🧪 Experimental / higher risk
 - **KernelSU-Next *legacy* driver** (`setup.sh … legacy`) to support manager **v3.2.0+**. Currently we
