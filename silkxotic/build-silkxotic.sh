@@ -14,6 +14,11 @@ export PATH="$TC_DIR/bin:$PATH"
 export ARCH=arm64 SUBARCH=arm64
 JOBS="${JOBS:-6}"
 OUT="${OUT:-out}"
+# Extra config fragments to merge after the standard SilkXotic set (space-separated
+# paths). Used for experiment builds that must not touch the release config, e.g.
+#   EXTRA_CONFIGS=arch/arm64/configs/vendor/silkxotic-exp-inputboost.config \
+#     OUT=out-exp ./silkxotic/build-silkxotic.sh
+EXTRA_CONFIGS="${EXTRA_CONFIGS:-}"
 
 if ! command -v clang >/dev/null || [ ! -x "$TC_DIR/bin/clang" ]; then
   echo "!! clang not found in TC_DIR=$TC_DIR — set TC_DIR to your clang-r563880c dir." >&2
@@ -28,7 +33,7 @@ CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-gnu-"
 
 V="arch/arm64/configs/vendor"
 echo ">>> $(date)  clang: $(clang --version | head -1)"
-echo ">>> .config = sdmsteppe-perf + sweet + silkxotic-opts + silkxotic-slim + silkxotic-zram-zstd + silkxotic-net-bbr + silkxotic-hungtask + buildhost-lowram + silkxotic-brand"
+echo ">>> .config = sdmsteppe-perf + sweet + silkxotic-opts + silkxotic-slim + silkxotic-zram-zstd + silkxotic-net-bbr + silkxotic-hungtask${EXTRA_CONFIGS:+ + $EXTRA_CONFIGS} + buildhost-lowram + silkxotic-brand"
 rm -rf "$OUT" && mkdir -p "$OUT"
 ARCH=arm64 bash scripts/kconfig/merge_config.sh -O "$OUT" \
   "$V/sdmsteppe-perf_defconfig" \
@@ -38,13 +43,14 @@ ARCH=arm64 bash scripts/kconfig/merge_config.sh -O "$OUT" \
   "$V/silkxotic-zram-zstd.config" \
   "$V/silkxotic-net-bbr.config" \
   "$V/silkxotic-hungtask.config" \
+  $EXTRA_CONFIGS \
   "$V/buildhost-lowram.config" \
   "$V/silkxotic-brand.config"
 
 make O="$OUT" ARCH=arm64 $TOOLS olddefconfig
 
 echo ">>> sanity: SilkXotic knobs + LTO mode + brand"
-grep -E "CONFIG_(CPU_BOOST|SCHED_CORE_CTL|MSM_PERFORMANCE|SCHED_AUTOGROUP|BALANCE_ANON_FILE_RECLAIM|SLUB_CPU_PARTIAL|LTO_CLANG|THINLTO|LOCALVERSION|DETECT_HUNG_TASK|DEFAULT_HUNG_TASK_TIMEOUT)=" "$OUT/.config" | sort
+grep -E "CONFIG_(CPU_BOOST_INPUT_FREQ_DEFAULT|CPU_BOOST|SCHED_CORE_CTL|MSM_PERFORMANCE|SCHED_AUTOGROUP|BALANCE_ANON_FILE_RECLAIM|SLUB_CPU_PARTIAL|LTO_CLANG|THINLTO|LOCALVERSION|DETECT_HUNG_TASK|DEFAULT_HUNG_TASK_TIMEOUT)=" "$OUT/.config" | sort
 
 echo ">>> building Image.gz (-j$JOBS, ThinLTO)  $(date +%T)"
 make O="$OUT" ARCH=arm64 $TOOLS -j"$JOBS" Image.gz
