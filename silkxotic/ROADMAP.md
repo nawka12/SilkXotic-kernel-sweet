@@ -114,6 +114,15 @@ scheduler tuning** — plus actually *measuring* the touch-feel the kernel is br
   never armed, so there was nothing to measure. Enabling them costs nothing but buys nothing either —
   the only way they become real is a compiled-in default (🧪 v1.2.0 `CPU_BOOST_INPUT_FREQ_DEFAULT`
   experiment). If that A/B does not win, drop both from the config and the pitch.
+- **Compiled-in `hung_task_timeout_secs`** — measured dead 2026-09-04 on the flashed v1.2.0:
+  `CONFIG_DEFAULT_HUNG_TASK_TIMEOUT=120` is compiled in and the sysctls exist, but AOSP's
+  `/system/etc/init/hw/init.rc` writes `hung_task_timeout_secs 0` early in every boot, so the live
+  value is 0 and khungtaskd never scans. Android's intended replacement (llkd) is inert here too —
+  `ro.llk.enable` / `ro.khungtask.*` are unset on crDroid and `ro.debuggable=0`, so `llkd.rc` never
+  re-arms it. **The device therefore ships with no stall detection at all.** Same override class as
+  the scheduler knobs below. Keep `CONFIG_DETECT_HUNG_TASK=y` (nothing can enable it otherwise), but
+  arming it needs a post-init write — a KSU module doing `echo 120 > …/hung_task_timeout_secs` is the
+  cheapest path, at the cost of adding a userspace component to a kernel-only project.
 - GKI port — impractical on SM7150 (no QC 5.x BSP; full driver port; likely-broken camera/modem).
 - `-O3`/Polly/compiler hacks — rarely net-positive on phones, not worth the risk.
 - **Feature fluff other sweet kernels ship** (KCAL/display-color, sound control, USB fastcharge,
