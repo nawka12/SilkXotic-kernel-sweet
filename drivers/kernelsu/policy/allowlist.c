@@ -195,10 +195,23 @@ static void put_perm_data(struct perm_data *data)
     kref_put(&data->ref, release_perm_data);
 }
 
+static void migrate_profile(u32 version, struct app_profile *profile);
+
 int ksu_set_app_profile(struct app_profile *profile)
 {
     struct perm_data *p, *np;
     int result = 0;
+
+    /*
+     * SilkXotic: a manager older than the driver sends a pre-v4 profile (the
+     * v3.1.0 manager sends v2), which profile_valid() then rejects with
+     * "Unsupported profile version", so every root grant from the manager
+     * fails. ksu_load_allow_list() already migrates on the boot-time file
+     * path; do the same here on the live-set path.
+     */
+    if (profile && profile->version >= 2 &&
+        profile->version < KSU_APP_PROFILE_VER)
+        migrate_profile(profile->version, profile);
 
     if (!profile_valid(profile)) {
         pr_err("Failed to set app profile: invalid profile!\n");
@@ -562,8 +575,9 @@ void ksu_load_allow_list()
 
 	pr_info("allowlist version: %d\n", version);
 
-	static const size_t kAppProfileSizePreV4 = 776;
-	app_profile_size = version < KSU_APP_PROFILE_VER ? kAppProfileSizePreV4 : sizeof(struct app_profile);
+	app_profile_size = version < KSU_APP_PROFILE_VER ?
+				 KSU_APP_PROFILE_SIZE_PRE_V4 :
+				 sizeof(struct app_profile);
 
 	while (true) {
 		struct app_profile profile;

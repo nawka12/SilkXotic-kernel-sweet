@@ -388,9 +388,31 @@ static int do_set_app_profile(void __user *arg)
 #endif
 
     struct ksu_set_app_profile_cmd cmd;
+    __u32 version;
+    size_t n;
     int ret;
 
-	if (copy_from_user(&cmd, arg, sizeof(cmd))) {
+    /*
+     * SilkXotic: a pre-v4 manager passes a 776-byte struct app_profile (no
+     * trailing root_profile.flags). Reading sizeof(cmd) from it would run off
+     * the end of its buffer, so size the read by the version the caller
+     * declares and zero the rest -- ksu_set_app_profile() migrates it to v4.
+     */
+    if (copy_from_user(&version,
+			(char __user *)arg +
+				offsetof(struct ksu_set_app_profile_cmd,
+					 profile.version),
+			sizeof(version))) {
+		pr_err("set_app_profile: copy_from_user failed\n");
+		return -EFAULT;
+	}
+
+    n = (version >= 2 && version < KSU_APP_PROFILE_VER) ?
+		      KSU_APP_PROFILE_SIZE_PRE_V4 :
+		      sizeof(cmd);
+
+    memset(&cmd, 0, sizeof(cmd));
+	if (copy_from_user(&cmd, arg, n)) {
 		pr_err("set_app_profile: copy_from_user failed\n");
 		return -EFAULT;
 	}

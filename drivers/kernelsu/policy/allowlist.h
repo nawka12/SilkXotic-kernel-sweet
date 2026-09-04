@@ -5,6 +5,13 @@
 #include <linux/uidgid.h>
 #include "app_profile.h"
 
+/*
+ * Size of struct app_profile as serialized by managers/allowlist files older
+ * than KSU_APP_PROFILE_VER 4, i.e. without the trailing root_profile.flags.
+ * Used to bound reads of a pre-v4 payload before migrate_profile() runs.
+ */
+#define KSU_APP_PROFILE_SIZE_PRE_V4 776
+
 #define PER_USER_RANGE 100000
 #define WEBVIEW_ZYGOTE_UID 1053
 #define FIRST_APPLICATION_UID 10000
