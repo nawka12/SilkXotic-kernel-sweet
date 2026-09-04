@@ -213,6 +213,20 @@ config CPU_BOOST
 
 	  If in doubt, say N.
 
+config CPU_BOOST_INPUT_FREQ_DEFAULT
+	string "Default input boost frequencies (\"cpu:kHz cpu:kHz ...\" or a single kHz); empty disables"
+	depends on CPU_BOOST
+	default ""
+	help
+	  Applied at init exactly like a write to
+	  /sys/module/cpu_boost/parameters/input_boost_freq. Userspace can still
+	  override it later through that same node.
+
+	  Useful on platforms whose userspace never writes the node at all, which
+	  leaves the input boost permanently disarmed.
+
+	  Leave empty (the default) to keep the driver's stock behaviour.
+
 config CPU_FREQ_GOV_SCHEDUTIL
 	bool "'schedutil' cpufreq policy governor"
 	depends on CPU_FREQ && SMP

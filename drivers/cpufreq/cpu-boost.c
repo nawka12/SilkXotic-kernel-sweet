@@ -327,6 +327,19 @@ static int cpu_boost_init(void)
 		s = &per_cpu(sync_info, cpu);
 		s->cpu = cpu;
 	}
+
+	/*
+	 * Arm the boost from the compiled-in default when userspace never writes
+	 * input_boost_freq itself. Empty string (the default) changes nothing.
+	 */
+	if (CONFIG_CPU_BOOST_INPUT_FREQ_DEFAULT[0]) {
+		ret = set_input_boost_freq(CONFIG_CPU_BOOST_INPUT_FREQ_DEFAULT,
+					   NULL);
+		if (ret)
+			pr_err("bad CONFIG_CPU_BOOST_INPUT_FREQ_DEFAULT \"%s\"\n",
+			       CONFIG_CPU_BOOST_INPUT_FREQ_DEFAULT);
+	}
+
 	cpufreq_register_notifier(&boost_adjust_nb, CPUFREQ_POLICY_NOTIFIER);
 
 	ret = input_register_handler(&cpuboost_input_handler);
