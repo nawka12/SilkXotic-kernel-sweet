@@ -70,6 +70,13 @@ KBUILD_CFLAGS	+= -mgeneral-regs-only $(lseinstr) $(brokengasinst)
 KBUILD_CFLAGS	+= -fno-asynchronous-unwind-tables
 KBUILD_CFLAGS	+= $(call cc-option, -mpc-relative-literal-loads)
 KBUILD_CFLAGS	+= -fno-pic
+
+# SilkXotic: the top-level Makefile's -mcpu/-mtune block is gated on cc-name=gcc,
+# so a clang build gets generic armv8-a instruction scheduling. -mtune is
+# scheduling-only (no ISA change), so it stays safe on the A55 littles; we do not
+# use -mcpu/-march, which would let clang emit armv8.2/LSE outside the
+# ARM64_LSE_ATOMICS alternatives framework. cortex-a76 matches the gcc line above.
+KBUILD_CFLAGS	+= $(call cc-option,-mtune=cortex-a76)
 KBUILD_AFLAGS	+= $(lseinstr) $(brokengasinst)
 
 KBUILD_CFLAGS	+= $(call cc-option,-mabi=lp64)

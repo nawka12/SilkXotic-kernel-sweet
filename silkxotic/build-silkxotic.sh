@@ -32,27 +32,46 @@ OBJDUMP=llvm-objdump STRIP=llvm-strip READELF=llvm-readelf \
 CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-gnu-"
 
 V="arch/arm64/configs/vendor"
+
+# Full LTO's final link needs ~8-12 GB (measured peak RSS 8691 MB). Set LOWRAM=1 on
+# hosts that can't afford that to drop to ThinLTO; hosts with the RAM keep crDroid's
+# full LTO. NOTE: the current 7.5 GB build host CANNOT link full LTO -- LOWRAM=1 is
+# mandatory there, not a precaution, and v1.2.0-Habotai was released as ThinLTO.
+LOWRAM="${LOWRAM:-0}"
+CONFIGS=(
+  "$V/sdmsteppe-perf_defconfig"
+  "$V/sweet.config"
+  "$V/silkxotic-opts.config"
+  "$V/silkxotic-slim.config"
+  "$V/silkxotic-zram-zstd.config"
+  "$V/silkxotic-net-bbr.config"
+  "$V/silkxotic-hungtask.config"
+)
+# Experiment fragments layer on top of the standard set but before the host/brand ones,
+# so an experiment build differs from the release by exactly the fragment under test.
+if [ -n "$EXTRA_CONFIGS" ]; then
+  CONFIGS+=( $EXTRA_CONFIGS )
+fi
+if [ "$LOWRAM" = 1 ]; then
+  CONFIGS+=( "$V/buildhost-lowram.config" )
+  LTO_MODE="ThinLTO (LOWRAM=1)"
+else
+  LTO_MODE="full LTO"
+fi
+CONFIGS+=( "$V/silkxotic-brand.config" )
+
 echo ">>> $(date)  clang: $(clang --version | head -1)"
-echo ">>> .config = sdmsteppe-perf + sweet + silkxotic-opts + silkxotic-slim + silkxotic-zram-zstd + silkxotic-net-bbr + silkxotic-hungtask${EXTRA_CONFIGS:+ + $EXTRA_CONFIGS} + buildhost-lowram + silkxotic-brand"
+echo ">>> LTO: $LTO_MODE"
+echo ">>> .config = ${CONFIGS[*]//$V\//}"
 rm -rf "$OUT" && mkdir -p "$OUT"
-ARCH=arm64 bash scripts/kconfig/merge_config.sh -O "$OUT" \
-  "$V/sdmsteppe-perf_defconfig" \
-  "$V/sweet.config" \
-  "$V/silkxotic-opts.config" \
-  "$V/silkxotic-slim.config" \
-  "$V/silkxotic-zram-zstd.config" \
-  "$V/silkxotic-net-bbr.config" \
-  "$V/silkxotic-hungtask.config" \
-  $EXTRA_CONFIGS \
-  "$V/buildhost-lowram.config" \
-  "$V/silkxotic-brand.config"
+ARCH=arm64 bash scripts/kconfig/merge_config.sh -O "$OUT" "${CONFIGS[@]}"
 
 make O="$OUT" ARCH=arm64 $TOOLS olddefconfig
 
 echo ">>> sanity: SilkXotic knobs + LTO mode + brand"
 grep -E "CONFIG_(CPU_BOOST_INPUT_FREQ_DEFAULT|CPU_BOOST|SCHED_CORE_CTL|MSM_PERFORMANCE|SCHED_AUTOGROUP|BALANCE_ANON_FILE_RECLAIM|SLUB_CPU_PARTIAL|LTO_CLANG|THINLTO|LOCALVERSION|DETECT_HUNG_TASK|DEFAULT_HUNG_TASK_TIMEOUT)=" "$OUT/.config" | sort
 
-echo ">>> building Image.gz (-j$JOBS, ThinLTO)  $(date +%T)"
+echo ">>> building Image.gz (-j$JOBS, $LTO_MODE)  $(date +%T)"
 make O="$OUT" ARCH=arm64 $TOOLS -j"$JOBS" Image.gz
 
 # Base dtb carries the EAS energy model (sdmmagpie.dtsi). We ship a value-only-edited
