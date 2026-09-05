@@ -39,3 +39,20 @@ adb shell su -W -c "cat /proc/sys/kernel/hung_task_timeout_secs"   # must be 120
 adb shell su -W -c "cat /proc/sys/kernel/hung_task_warnings"       # must be 65535
 adb shell su -W -c "cat /proc/sys/kernel/hung_task_panic"          # must be 0 (log-only)
 ```
+
+## drafts/
+
+`drafts/memwatch.sh` — a one-sample-per-minute reclaim logger, written to catch the memory pressure
+that only appears after hours of uptime and cannot be reproduced on demand (a fresh boot running the
+same game shows 910 MB available and *zero* direct reclaim; ten hours later the same phone shows
+442 MB and 1.99 GB swapped).
+
+It is deliberately **not** named `service.sh`. KSU auto-runs `service.sh` only, so nothing in
+`drafts/` executes until you rename it — the logger is smoke-tested but not validated as a
+long-running boot service.
+
+The column that decides everything is `dscan`/`dsteal`/`astall` (direct reclaim + allocstall).
+Direct reclaim runs in the *allocating* thread's context, so it is what actually stalls a frame;
+kswapd reclaim is background and does not. Measured 2026-09-05 under real 10 h-uptime pressure,
+these were **0** while kswapd still reclaimed ~3000 pages/s — so at that pressure level reclaim was
+happening and stalling nobody, and the 850–1850 ms frame stalls seen earlier remain unexplained.
