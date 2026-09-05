@@ -1,0 +1,6 @@
+id=silkxotic-tunables
+name=SilkXotic Tunables
+version=v1.0
+versionCode=1
+author=nawka12
+description=Re-asserts kernel tunables that crDroid userspace disables at boot. Currently: the hung-task detector (khungtaskd), which init.rc turns off despite the kernel compiling it in.
