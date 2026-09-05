@@ -110,3 +110,51 @@ default tier runs fully as shell uid 2000.
 ## Output
 One JSON object per iteration in `results/<tag>-<timestamp>.jsonl`. `results/` is git-ignored;
 commit a curated run if you want to publish numbers.
+
+---
+
+## Game frame-pacing A/B (`benchgame.sh`) — added 2026-09-04
+
+The suite above measures synthetic workloads. `benchgame.sh` measures a **real game's frame
+pacing**, which is what the thermal-clamp work (roadmap 🥇) actually has to move.
+
+### Why it needs its own harness
+A live game's frame rate is dominated by *what is on screen*, not by the kernel. The 2026-09-04
+probe measured hololive Dreams by hand and got 28 fps, 20 fps and 15 fps from the **same device,
+same kernel, same minute** — because one sample was a daytime plaza, one a 2D shop menu, and one
+the same plaza after the in-game clock rolled to night. Any A/B that doesn't pin the scene is
+measuring the game.
+
+### What it controls
+| Control | How |
+|---|---|
+| **Scene** | Raw framebuffer captured at window start + end; mean per-pixel drift recorded per iteration. `comparegame.py` voids the comparison if either side drifted >8% or the sides differ >5%. |
+| **Thermal state** | A `SOAK_S` (default 120 s) gameplay soak *before* iteration 1, not a cooldown — the metric of interest is the **sustained** clamp (`mi_thermald` converges the golds to ~1555 MHz after ~90 s), so a cold start measures the wrong thing. |
+| **Frame source** | `dumpsys SurfaceFlinger --latency` on the game's BLAST SurfaceView. Re-resolved every iteration — the layer id changes when the game recreates its surface (observed #688 → #756 → #843 in one session). |
+| **Transport** | All frame + sysfs sampling runs device-side and is pulled once, so it works unchanged over wireless adb (tailnet, ~360 ms RTT) where a host poll loop would perturb the measurement. |
+
+### Operator protocol (this *is* the experiment)
+- Park the character at a fixed landmark. Don't walk. Don't move the camera. Don't touch the screen.
+- Keep the **in-game time of day** the same on both sides — night costs ~40% of the frame rate here.
+- Same in-game graphics preset and fps cap on both sides; record them in the tag.
+- Note that the in-game fps cap matters: at a 30 cap the game returned 28.1 fps, at 60 it returned
+  28.0 fps with a **183 ms** worst frame instead of 50 ms. Same throughput, much worse pacing.
+
+### Usage
+```bash
+ADB_SERIAL=100.80.206.8:5555 ./benchgame.sh stock-clamp 5      # side A
+# flash the other kernel, return to the SAME spot, same in-game time
+ADB_SERIAL=100.80.206.8:5555 ./benchgame.sh bound-clamp 5      # side B
+./comparegame.py results/game-stock-clamp-*.jsonl results/game-bound-clamp-*.jsonl
+```
+Env: `DUR_S` (window, 30), `SOAK_S` (soak, 120), `GAP_S` (10), `ITERS` (arg 2, 5), `PKG`, `BRIGHT`.
+
+### Reading the output
+`comparegame.py` prints **frame pacing** (fps, p95/p99/worst, jank) and, separately, an
+**actuator** block (`cpu6 scaling_max`, `cdev cpufreq-6 state`, `gpu clock`, `gpu thermal_pwrlevel`).
+
+For a clamp patch the actuator block is the *first* thing to read, not the fps:
+- clamp moved **and** fps rose → the patch works and that scene was CPU-bound.
+- clamp moved, fps flat → patch works, but the scene was GPU-bound. Check `gpu busy`: if it is
+  >85% on both sides the script says so explicitly, because no CPU change can show up there.
+- clamp didn't move → the patch isn't reaching the actuator; userspace found another lever.
