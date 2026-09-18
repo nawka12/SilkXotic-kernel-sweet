@@ -22,12 +22,14 @@
 #
 #     drivers/block/zram/zram_drv.c
 #     arch/arm64/boot/dts/qcom/sdmmagpie.dtsi      (v1.1 EAS energy model)
-#     drivers/kernelsu/manager/throne_tracker.c    (v1.1.2 ABBA deadlock fix)
 #     drivers/kernelsu/policy/allowlist.c          (v1.2.0 pre-v4 profile migration)
 #     drivers/kernelsu/policy/allowlist.h          (v1.2.0 pre-v4 profile migration)
 #     drivers/kernelsu/supercall/dispatch.c        (v1.2.0 pre-v4 profile migration)
 #     drivers/cpufreq/cpu-boost.c                  (v1.2.0 compiled-in boost default)
 #     drivers/cpufreq/Kconfig                      (v1.2.0 compiled-in boost default)
+#     drivers/thermal/cpu_cooling.c                (cpu_cooling clamp)
+#     drivers/thermal/Kconfig                      (cpu_cooling clamp)
+#     arch/arm64/Makefile                          (clang -mtune=cortex-a76)
 #
 # so the merge is normally conflict-free. If upstream ever edits a file we also
 # patched, the script STOPS and lists it rather than silently clobbering our change.
@@ -94,7 +96,8 @@ git update-ref "$BASE_REF" "$NEW"
 
 # Bring the working tree in line for the changed paths only. Leaves WIP,
 # untracked files, and our customizations (all on other paths) untouched.
-git diff --name-only "$BASE" "$NEW" -z | xargs -0 --no-run-if-empty git checkout HEAD --
+# (restore, not checkout: checkout refuses paths upstream deleted.)
+git diff --name-only "$BASE" "$NEW" -z | xargs -0 --no-run-if-empty git restore --source=HEAD --staged --worktree --
 
 echo ">>> synced to ${NEW:0:7}; $BASE_REF updated. Review:  git show --stat HEAD"
 echo ">>> push when ready:  git push origin $BRANCH"
