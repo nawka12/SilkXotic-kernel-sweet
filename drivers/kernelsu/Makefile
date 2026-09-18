@@ -72,7 +72,7 @@ MDIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
 # Check if this is a git repository
 # Try to detect Git repo intelligently
-KSU_GIT_VERSION := 3215
+KSU_GIT_VERSION := 3276
 KSU_GIT_TAG := v3.3.0
 KSU_GIT_VERSION_VALID := 1
 
@@ -255,6 +255,9 @@ ccflags-y += -DKSU_COMPAT_HAS_EXPORTED_POLICY_RWLOCK
 endif
 ifeq ($(shell grep -q "cpus_ptr;" $(srctree)/include/linux/sched.h; echo $$?),0)
 ccflags-y += -DKSU_COMPAT_HAS_BACKPORTED_CPUS_PTR
+endif
+ifeq ($(shell grep -q "struct pid \*task_pgrp" $(srctree)/include/linux/sched.h; echo $$?),0)
+ccflags-y += -DKSU_COMPAT_HAS_TASK_PGRP_FUNC
 endif
 
 # fallthrough check for allowlist v2

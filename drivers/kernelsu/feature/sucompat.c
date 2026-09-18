@@ -93,6 +93,10 @@ int ksu_handle_faccessat(int *dfd, const char __user **filename_user,
 {
 	const char su[] = SU_PATH;
 
+	if (!ksu_su_compat_enabled) {
+		return 0;
+	}
+
 	if (!ksu_is_allow_uid_for_current(current_uid().val)) {
 		return 0;
 	}
@@ -114,6 +118,10 @@ int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags)
 {
 	// const char sh[] = SH_PATH;
 	const char su[] = SU_PATH;
+
+	if (!ksu_su_compat_enabled) {
+		return 0;
+	}
 
 	if (!ksu_is_allow_uid_for_current(current_uid().val)) {
 		return 0;
@@ -147,6 +155,9 @@ long ksu_handle_execve_sucompat(const char __user **filename_user, int orig_nr, 
 	unsigned long addr;
 
 	if (unlikely(!filename_user))
+		goto do_orig_execve;
+
+	if (!ksu_su_compat_enabled)
 		goto do_orig_execve;
 
 	if (!ksu_is_allow_uid_for_current(current_uid().val))
@@ -231,7 +242,7 @@ int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr,
 	return 0;
 }
 
-/*int __ksu_handle_devpts(struct inode *inode)
+int __ksu_handle_devpts(struct inode *inode)
 {
 #ifndef KSU_KPROBES_HOOK
 	if (!ksu_su_compat_enabled)
@@ -258,11 +269,10 @@ int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr,
 	return 0;
 }
 
-// dead code: devpts handling
 int __maybe_unused ksu_handle_devpts(struct inode *inode)
 {
 	return __ksu_handle_devpts(inode);
-}*/
+}
 
 // sucompat: permitted process can execute 'su' to gain root access.
 void __init ksu_sucompat_init()

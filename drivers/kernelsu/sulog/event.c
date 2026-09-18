@@ -9,7 +9,10 @@
 #include <linux/cred.h>
 #include <linux/gfp.h>
 #include <linux/overflow.h>
+#include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0)
 #include <linux/sched/signal.h>
+#endif
 #include <linux/slab.h>
 #include <linux/string.h>
 #include <linux/uaccess.h>
