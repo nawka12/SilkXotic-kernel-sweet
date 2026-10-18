@@ -25,6 +25,7 @@
 #     drivers/kernelsu/policy/allowlist.c          (v1.2.0 pre-v4 profile migration)
 #     drivers/kernelsu/policy/allowlist.h          (v1.2.0 pre-v4 profile migration)
 #     drivers/kernelsu/supercall/dispatch.c        (v1.2.0 pre-v4 profile migration)
+#     drivers/kernelsu/include/uapi/supercall.h    (UAPI 5 / EVENT_SERVICES, legacy 2d99a2d)
 #     drivers/cpufreq/cpu-boost.c                  (v1.2.0 compiled-in boost default)
 #     drivers/cpufreq/Kconfig                      (v1.2.0 compiled-in boost default)
 #     drivers/thermal/cpu_cooling.c                (cpu_cooling clamp)
@@ -34,11 +35,12 @@
 # so the merge is normally conflict-free. If upstream ever edits a file we also
 # patched, the script STOPS and lists it rather than silently clobbering our change.
 #
-# Usage:  silkxotic/sync-upstream.sh [branch]        (branch defaults to 16.0)
+# Usage:  silkxotic/sync-upstream.sh [branch]        (branch defaults to 16.0-ksu;
+#         crDroid moved KSU+SUSFS there in 2026-10 -- plain 16.0 has neither)
 set -euo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-BRANCH="${1:-16.0}"
+BRANCH="${1:-16.0-ksu}"
 UPSTREAM_URL="https://github.com/crdroidandroid/android_kernel_xiaomi_sm6150"
 BASE_REF="refs/silkxotic/upstream-base"
 

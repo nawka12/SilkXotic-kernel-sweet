@@ -1,0 +1,5 @@
+exclude=/.git/
+exclude=/out-*/
+pull=/out-sync/.config
+pull=/out-sync/arch/arm64/boot/Image.gz
+pull=/out-sync/arch/arm64/boot/dts/qcom/xiaomi-sdmmagpie.dtb
