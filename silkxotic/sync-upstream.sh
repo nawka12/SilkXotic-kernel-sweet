@@ -23,6 +23,7 @@
 #     drivers/block/zram/zram_drv.c
 #     (sdmmagpie.dtsi energy-model edit: 16.0 only — 17.0 takes upstream's new table)
 #     drivers/scsi/ufs/ufshcd.{c,h}, ufs-debugfs.c (v1.3.5 error handler on WQ_MEM_RECLAIM)
+#     fs/stat.c                                    (17.0: newfstat calls ksu_handle_newfstat_ret)
 #     drivers/kernelsu/policy/allowlist.c         (v1.2.0 pre-v4 profile migration)
 #     drivers/kernelsu/policy/allowlist.h          (v1.2.0 pre-v4 profile migration)
 #     drivers/kernelsu/supercall/dispatch.c        (v1.2.0 pre-v4 profile migration)
