@@ -21,7 +21,7 @@
 # the set the collision check below actually protects):
 #
 #     drivers/block/zram/zram_drv.c
-#     (sdmmagpie.dtsi energy-model edit: 16.0 only — 17.0 takes upstream's new table)
+#     arch/arm64/boot/dts/qcom/sdmmagpie.dtsi      (A16 capacity-dmips-mhz + EAS cost table, silver 145/175)
 #     drivers/scsi/ufs/ufshcd.{c,h}, ufs-debugfs.c (v1.3.5 error handler on WQ_MEM_RECLAIM)
 #     fs/stat.c                                    (17.0: newfstat calls ksu_handle_newfstat_ret)
 #     drivers/kernelsu/policy/allowlist.c         (v1.2.0 pre-v4 profile migration)
