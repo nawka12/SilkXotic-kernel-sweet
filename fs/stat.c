@@ -205,6 +205,9 @@ EXPORT_SYMBOL(vfs_statx_fd);
 #if defined(CONFIG_KSU) && !defined(CONFIG_KSU_TAMPER_SYSCALL_TABLE)
 extern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags);
 #endif
+#ifdef CONFIG_KSU_MANUAL_HOOK
+extern void ksu_handle_newfstat_ret(unsigned int *fd, struct stat __user **statbuf_ptr);
+#endif
 
 
 /**
@@ -437,6 +440,11 @@ SYSCALL_DEFINE2(newfstat, unsigned int, fd, struct stat __user *, statbuf)
 
 	if (!error)
 		error = cp_new_stat(&stat, statbuf);
+#ifdef CONFIG_KSU_MANUAL_HOOK
+	/* Android 17 init reads init.rc by st_size: report the injected KSU rc too */
+	if (!error)
+		ksu_handle_newfstat_ret(&fd, &statbuf);
+#endif
 
 	return error;
 }
