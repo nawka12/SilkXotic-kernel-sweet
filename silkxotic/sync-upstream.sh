@@ -10,7 +10,7 @@
 # What this does instead:
 #   1. Shallow-fetches ONLY the upstream tip (no history download).
 #   2. Reads the upstream commit we're currently synced to from the ref
-#        refs/silkxotic/upstream-base
+#        refs/silkxotic/upstream-base-<our branch>
 #   3. 3-way merges  base .. new-tip  onto HEAD in a scratch index (git objects
 #      only — the working tree, our WIP, untracked files and the pile of
 #      git-ignored kernel build artifacts on disk are all left alone).
@@ -35,14 +35,17 @@
 # so the merge is normally conflict-free. If upstream ever edits a file we also
 # patched, the script STOPS and lists it rather than silently clobbering our change.
 #
-# Usage:  silkxotic/sync-upstream.sh [branch]        (branch defaults to 16.0-ksu;
-#         crDroid moved KSU+SUSFS there in 2026-10 -- plain 16.0 has neither)
+# Usage:  silkxotic/sync-upstream.sh [branch]
+#   branch defaults to "<our current branch>-ksu" (16.0 -> 16.0-ksu, 17.0 -> 17.0-ksu):
+#   crDroid moved KSU+SUSFS to the -ksu branches in 2026-10; plain 16.0/17.0 have neither.
+#   Each of our branches tracks its own base in refs/silkxotic/upstream-base-<our branch>.
 set -euo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-BRANCH="${1:-16.0-ksu}"
+CUR=$(git branch --show-current)
+BRANCH="${1:-$CUR-ksu}"
 UPSTREAM_URL="https://github.com/crdroidandroid/android_kernel_xiaomi_sm6150"
-BASE_REF="refs/silkxotic/upstream-base"
+BASE_REF="refs/silkxotic/upstream-base-$CUR"
 
 git remote get-url upstream >/dev/null 2>&1 || git remote add upstream "$UPSTREAM_URL"
 
