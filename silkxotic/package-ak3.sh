@@ -10,7 +10,7 @@ IMG="${IMG:-out/arch/arm64/boot/Image.gz}"
 DTB="${DTB-$(dirname "$IMG")/dts/qcom/xiaomi-sdmmagpie.dtb}"   # base dtb from the SAME build as IMG; DTB= (empty) => kernel-only
 AK3_TEMPLATE="${AK3_TEMPLATE:?set AK3_TEMPLATE=/path/to/anykernel3-sweet.zip}"
 VER="${VER:-v1.0-Mulberry}"
-OUTZIP="${OUTZIP:-SilkXotic-sweet-$VER.zip}"
+OUTZIP="$(realpath -m "${OUTZIP:-SilkXotic-sweet-$VER.zip}")"   # relative paths are from the repo root
 
 [ -f "$IMG" ] || { echo "!! $IMG missing — build first."; exit 1; }
 work="$(mktemp -d)"; trap 'rm -rf "$work"' EXIT
@@ -33,7 +33,7 @@ fi
 unzip -oq "$OUTZIP" anykernel.sh -d "$work"
 sed -i -e "s|^kernel.string=.*|kernel.string=SilkXotic $VER - smooth-tuned 4.14.357 (Tobrut Exotic DNA)|" \
        -e "s|^supported.versions=.*|supported.versions=11 - 17|" "$work/anykernel.sh"
-( cd "$work" && zip -q "$OLDPWD/$OUTZIP" $zipfiles )
+( cd "$work" && zip -q "$OUTZIP" $zipfiles )
 
 echo ">>> $OUTZIP"
 unzip -l "$OUTZIP" | grep -E "Image.gz| dtb$|banner|anykernel|update-binary"
