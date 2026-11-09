@@ -1080,10 +1080,10 @@ static void remove_waiter(struct rt_mutex *lock,
 	if (!waiter_task) /* never enqueued */
 		return;
 
-	scoped_guard(raw_spinlock, &waiter_task->pi_lock) {
-		rt_mutex_dequeue(lock, waiter);
-		waiter_task->pi_blocked_on = NULL;
-	}
+	raw_spin_lock(&waiter_task->pi_lock);
+	rt_mutex_dequeue(lock, waiter);
+	waiter_task->pi_blocked_on = NULL;
+	raw_spin_unlock(&waiter_task->pi_lock);
 
 	/*
 	 * Only update priority if the waiter was the highest priority
