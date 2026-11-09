@@ -21,8 +21,9 @@
 # the set the collision check below actually protects):
 #
 #     drivers/block/zram/zram_drv.c
-#     arch/arm64/boot/dts/qcom/sdmmagpie.dtsi      (v1.1 EAS energy model)
-#     drivers/kernelsu/policy/allowlist.c          (v1.2.0 pre-v4 profile migration)
+#     (sdmmagpie.dtsi energy-model edit: 16.0 only — 17.0 takes upstream's new table)
+#     drivers/scsi/ufs/ufshcd.{c,h}, ufs-debugfs.c (v1.3.5 error handler on WQ_MEM_RECLAIM)
+#     drivers/kernelsu/policy/allowlist.c         (v1.2.0 pre-v4 profile migration)
 #     drivers/kernelsu/policy/allowlist.h          (v1.2.0 pre-v4 profile migration)
 #     drivers/kernelsu/supercall/dispatch.c        (v1.2.0 pre-v4 profile migration)
 #     drivers/kernelsu/include/uapi/supercall.h    (UAPI 5 / EVENT_SERVICES, legacy 2d99a2d)
