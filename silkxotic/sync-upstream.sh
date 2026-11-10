@@ -21,7 +21,6 @@
 # the set the collision check below actually protects):
 #
 #     drivers/block/zram/zram_drv.c
-#     arch/arm64/boot/dts/qcom/sdmmagpie.dtsi      (A16 capacity-dmips-mhz + EAS cost table, silver 145/175)
 #     drivers/scsi/ufs/ufshcd.{c,h}, ufs-debugfs.c (v1.3.5 error handler on WQ_MEM_RECLAIM)
 #     fs/stat.c                                    (17.0: newfstat calls ksu_handle_newfstat_ret)
 #     drivers/kernelsu/policy/allowlist.c         (v1.2.0 pre-v4 profile migration)
@@ -32,20 +31,29 @@
 #     drivers/cpufreq/Kconfig                      (v1.2.0 compiled-in boost default)
 #     drivers/thermal/cpu_cooling.c                (cpu_cooling clamp)
 #     drivers/thermal/Kconfig                      (cpu_cooling clamp)
-#     arch/arm64/Makefile                          (clang -mtune=cortex-a76)
+#
+# On 17.0 we also carry KernelSU-Next + SUSFS ourselves (see "Upstream branch"
+# below): drivers/kernelsu/, fs/susfs.c, include/linux/susfs*.h, and their hooks
+# and backports across fs/, kernel/, mm/, include/linux/ and security/selinux/.
+# List them with  git diff --stat refs/silkxotic/upstream-base-17.0 HEAD
 #
 # so the merge is normally conflict-free. If upstream ever edits a file we also
 # patched, the script STOPS and lists it rather than silently clobbering our change.
 #
 # Usage:  silkxotic/sync-upstream.sh [branch]
-#   branch defaults to "<our current branch>-ksu" (16.0 -> 16.0-ksu, 17.0 -> 17.0-ksu):
-#   crDroid moved KSU+SUSFS to the -ksu branches in 2026-10; plain 16.0/17.0 have neither.
+#   Upstream branch: 16.0 -> 16.0-ksu, anything else (17.0) -> the same name.
+#   crDroid moved KSU+SUSFS to the -ksu branches in 2026-10, and 17.0-ksu is "only for
+#   backup purpose" and stopped getting 17.0's fixes. So since 2026-11-10, 17.0 follows
+#   plain 17.0, with KSU+SUSFS carried from 17.0-ksu @ fe120ee (commit 376c70212).
+#   KSU/SUSFS updates now have to come from KernelSU-Next / susfs4ksu by hand.
 #   Each of our branches tracks its own base in refs/silkxotic/upstream-base-<our branch>.
+#   Don't pass a -ksu branch on 17.0: its base is plain 17.0, so the delta would be wrong.
 set -euo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 CUR=$(git branch --show-current)
-BRANCH="${1:-$CUR-ksu}"
+case "$CUR" in 16.0) DEF="$CUR-ksu" ;; *) DEF="$CUR" ;; esac
+BRANCH="${1:-$DEF}"
 UPSTREAM_URL="https://github.com/crdroidandroid/android_kernel_xiaomi_sm6150"
 BASE_REF="refs/silkxotic/upstream-base-$CUR"
 
