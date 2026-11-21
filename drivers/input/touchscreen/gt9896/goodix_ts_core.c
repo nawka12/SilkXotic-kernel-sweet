@@ -50,6 +50,13 @@
 #define PANEL_ORIENTATION_DEGREE_180	2	/* anticlockwise 180 degrees */
 #define PANEL_ORIENTATION_DEGREE_270	3	/* anticlockwise 270 degrees */
 
+/*
+ * How long the panel may stay silent after a frame was lost before the
+ * remaining contacts are treated as stuck.  A finger that is still down
+ * keeps streaming frames, so a held contact never hits this timeout.
+ */
+#define GOODIX_LOST_REPORT_MS		50
+
 extern int goodix_i2c_write(struct goodix_ts_device *dev, unsigned int reg, unsigned char *data, unsigned int len);
 static int goodix_ts_remove(struct platform_device *pdev);
 int goodix_start_later_init(struct goodix_ts_core *ts_core);
@@ -1123,7 +1130,6 @@ static void goodix_ts_report_finger(struct input_dev *dev,
 	struct goodix_ts_core *core_data = input_get_drvdata(dev);
 	struct goodix_ts_device *ts_dev = core_data->ts_dev;
 	unsigned int touch_num = touch_data->touch_num;
-	static u32 pre_fin;
 	static u32 fp_event_normal;
 	static struct goodix_ts_pre_coords pre_coords[GOODIX_MAX_TOUCH];
 	int fod_up_area = -1;
@@ -1180,14 +1186,8 @@ static void goodix_ts_report_finger(struct input_dev *dev,
                        touch_data->coords[i].w, touch_data->coords[i].overlapping_area);*/
 	}
 
-	/*first touch down and last touch up condition*/
-	if (touch_num && !pre_fin)
-		input_report_key(dev, BTN_TOUCH, 1);
-	else if (!touch_num) {
-		input_report_key(dev, BTN_TOUCH, 0);
-	}
-
-	pre_fin = touch_num;
+	/* input core drops repeats, so this only emits on first down / last up */
+	input_report_key(dev, BTN_TOUCH, !!touch_num);
 
 	/* report panel key */
 	for (i = 0; i < GOODIX_MAX_TP_KEY; i++) {
@@ -1264,7 +1264,34 @@ static irqreturn_t goodix_ts_threadirq_func(int irq, void *data)
 
 	/* read touch data from touch device */
 	r = ts_dev->hw_ops->event_handler(ts_dev, ts_event);
+	if (unlikely(r < 0)) {
+		/*
+		 * A touch frame that cannot be parsed (checksum error or
+		 * aborted i2c transfer) is dropped.  When the dropped frame
+		 * carried the final release, the contact stays down and the
+		 * input stack keeps seeing a held touch.
+		 *
+		 * Do not tear the contacts down right here: a spurious
+		 * interrupt also reaches this path, and a contact that is
+		 * actively used (an analog stick, a long press) must not be
+		 * dropped because of one bad read.  Retry once, then arm a
+		 * watchdog that only releases when the panel stays silent
+		 * afterwards, which is the actual symptom of a lost release.
+		 */
+		if (core_data->event_status & GOODIX_TOUCH_EVENT) {
+			r = ts_dev->hw_ops->event_handler(ts_dev, ts_event);
+			if (unlikely(r < 0) && core_data->touch_id &&
+			    !atomic_xchg(&core_data->report_lost, 1))
+				schedule_delayed_work(
+					&core_data->lost_report_work,
+					msecs_to_jiffies(GOODIX_LOST_REPORT_MS));
+		}
+	}
+
 	if (likely(r >= 0)) {
+		/* a fresh frame arrived, the panel is still alive */
+		atomic_set(&core_data->report_lost, 0);
+		cancel_delayed_work(&core_data->lost_report_work);
 		if (ts_event->event_type == EVENT_TOUCH) {
 			/* report touch */
 			goodix_ts_report_finger(core_data->input_dev,
@@ -1714,6 +1741,8 @@ void goodix_ts_pen_dev_remove(struct goodix_ts_core *core_data)
  * goodix_ts_esd_work - check hardware status and recovery
  *  the hardware if needed.
  */
+static void goodix_ts_release_connects(struct goodix_ts_core *core_data);
+
 static void goodix_ts_esd_work(struct work_struct *work)
 {
 	struct delayed_work *dwork = to_delayed_work(work);
@@ -1731,6 +1760,16 @@ static void goodix_ts_esd_work(struct work_struct *work)
 	if (hw_ops->check_hw)
 		r = hw_ops->check_hw(core->ts_dev);
 	if (r < 0) {
+		bool irq_was_enabled = atomic_read(&core->irq_enabled);
+
+		/*
+		 * The recovery below power cycles the controller and pulls
+		 * the reset line, just like resume does.  Keep the threaded
+		 * IRQ from starting an I2C transfer while the chip is held
+		 * in reset, and restore the previous IRQ state afterwards.
+		 */
+		if (irq_was_enabled)
+			goodix_ts_irq_enable(core, false);
 		goodix_ts_power_off(core);
 		goodix_ts_power_on(core);
 		if (hw_ops->reset)
@@ -1741,6 +1780,15 @@ static void goodix_ts_esd_work(struct work_struct *work)
 					&data, 1);
 		if (r < 0)
 			ts_err("failed init dynamic esd");
+
+		/* the reset dropped any contact the IC was still tracking */
+		mutex_lock(&core->ts_dev->report_mutex);
+		goodix_ts_release_connects(core);
+		core->touch_id = 0;
+		mutex_unlock(&core->ts_dev->report_mutex);
+
+		if (irq_was_enabled)
+			goodix_ts_irq_enable(core, true);
 	} else {
 		/*init dynamic esd*/
 		r = hw_ops->write_trans(core->ts_dev,
@@ -1872,6 +1920,32 @@ static void goodix_ts_release_connects(struct goodix_ts_core *core_data)
 	ts_info("release all finger!");
 }
 
+/*
+ * Runs when a touch frame was lost and no further frame arrived in
+ * GOODIX_LOST_REPORT_MS.  Any frame that does arrive cancels the work, so
+ * only a contact whose release was really lost is released here.
+ */
+static void goodix_ts_lost_report_work(struct work_struct *work)
+{
+	struct goodix_ts_core *core_data = container_of(work,
+			struct goodix_ts_core, lost_report_work.work);
+	struct goodix_ts_device *ts_dev = core_data->ts_dev;
+
+	if (atomic_read(&core_data->suspended))
+		return;
+
+	if (!atomic_xchg(&core_data->report_lost, 0))
+		return;
+
+	mutex_lock(&ts_dev->report_mutex);
+	if (core_data->touch_id) {
+		ts_err("touch report lost, releasing stuck contacts");
+		core_data->touch_id = 0;
+		goodix_ts_release_connects(core_data);
+	}
+	mutex_unlock(&ts_dev->report_mutex);
+}
+
 /**
  * goodix_ts_suspend - Touchscreen suspend function
  * Called by PM/FB/EARLYSUSPEN module to put the device to  sleep
@@ -1970,6 +2044,8 @@ static int goodix_ts_suspend(struct goodix_ts_core *core_data)
 	goodix_ts_power_off(core_data);
 
 out:
+	cancel_delayed_work_sync(&core_data->lost_report_work);
+	atomic_set(&core_data->report_lost, 0);
 	goodix_ts_release_connects(core_data);
 	mutex_unlock(&core_data->work_stat);
 	ts_info("Suspend end");
@@ -1998,8 +2074,16 @@ static int goodix_ts_resume(struct goodix_ts_core *core_data)
 	core_data->gesture_enabled = 1;
 #endif
 
+	/*
+	 * Quiesce the threaded IRQ before powering up, switching pins and
+	 * pulling the reset line.  With the gesture module armed the
+	 * interrupt stays enabled across suspend, so a pending touch or
+	 * gesture frame can still be in the middle of an I2C read when the
+	 * reset line goes low, which times out on the GENI controller and
+	 * stalls the resume path by a retry interval.
+	 */
+	goodix_ts_irq_enable(core_data, false);
 	goodix_ts_power_on(core_data);
-
 
 	mutex_lock(&goodix_modules.mutex);
 	if (!list_empty(&goodix_modules.head)) {
@@ -2035,6 +2119,20 @@ static int goodix_ts_resume(struct goodix_ts_core *core_data)
 		ts_dev->hw_ops->resume(ts_dev);
 	atomic_set(&core_data->suspend_stat, TP_NO_SUSPEND);
 
+	/*
+	 * A gesture (e.g. FOD down on AOD) may have reported a press that
+	 * the IC will never release after the reset above. Drop any such
+	 * stale contacts so userspace does not see a stuck key-down.
+	 */
+	if (ts_dev) {
+		mutex_lock(&ts_dev->report_mutex);
+		goodix_ts_release_connects(core_data);
+		core_data->touch_id = 0;
+		core_data->fod_pressed = false;
+		core_data->sleep_finger = false;
+		mutex_unlock(&ts_dev->report_mutex);
+	}
+
 	mutex_lock(&goodix_modules.mutex);
 	if (!list_empty(&goodix_modules.head)) {
 		list_for_each_entry_safe(ext_module, next,
@@ -2054,8 +2152,6 @@ static int goodix_ts_resume(struct goodix_ts_core *core_data)
 	}
 	mutex_unlock(&goodix_modules.mutex);
 
-	goodix_ts_irq_enable(core_data, true);
-
 	/*
 	 * notify resume event, inform the esd protector
 	 * and charger detector to turn on the work
@@ -2063,6 +2159,7 @@ static int goodix_ts_resume(struct goodix_ts_core *core_data)
 	ts_info("try notify resume");
 	goodix_ts_blocking_notify(NOTIFY_RESUME, NULL);
 out:
+	goodix_ts_irq_enable(core_data, true);
 	mutex_unlock(&core_data->work_stat);
 	ts_info("Resume end");
 	return 0;
@@ -3226,6 +3323,8 @@ static int goodix_ts_probe(struct platform_device *pdev)
 	INIT_WORK(&core_data->suspend_work, goodix_ts_suspend_work);
 	INIT_WORK(&core_data->power_supply_work, goodix_power_supply_work);
 	INIT_WORK(&core_data->gesture_work, gtp_set_gesture_work);
+	INIT_DELAYED_WORK(&core_data->lost_report_work,
+			goodix_ts_lost_report_work);
 	/*
 	 * only for MTK platform
 	 * pm_qos_add_request(&core_data->tp_qos_request, PM_QOS_CPU_DMA_LATENCY, PM_QOS_DEFAULT_VALUE);
@@ -3351,6 +3450,7 @@ static int goodix_ts_remove(struct platform_device *pdev)
 	struct goodix_ts_core *core_data = platform_get_drvdata(pdev);
 
 	atomic_set(&core_data->initialized, 0);
+	cancel_delayed_work_sync(&core_data->lost_report_work);
 	if (atomic_read(&core_data->ts_esd.esd_on))
 		goodix_ts_esd_off(core_data);
 #ifdef CONFIG_DRM
