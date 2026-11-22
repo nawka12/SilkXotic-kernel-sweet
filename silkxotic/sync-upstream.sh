@@ -25,6 +25,7 @@
 #     fs/stat.c                                    (17.0: newfstat calls ksu_handle_newfstat_ret)
 #     scripts/extract-cert.c                       (17.0: builds against OpenSSL 4 / OPENSSL_NO_ENGINE)
 #     lib/lz4/*, include/linux/lz4.h               (17.0: LZ4 v1.10.0 import + kernel-stack fixes)
+#     drivers/gpu/msm/{adreno_ringbuffer,kgsl_drawobj,kgsl_ioctl,kgsl}.c (17.0: Sultan's KGSL latency patches)
 #     drivers/kernelsu/policy/allowlist.c         (v1.2.0 pre-v4 profile migration)
 #     drivers/kernelsu/policy/allowlist.h          (v1.2.0 pre-v4 profile migration)
 #     drivers/kernelsu/supercall/dispatch.c        (v1.2.0 pre-v4 profile migration)
