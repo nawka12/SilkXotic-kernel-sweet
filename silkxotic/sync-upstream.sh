@@ -24,6 +24,7 @@
 #     drivers/scsi/ufs/ufshcd.{c,h}, ufs-debugfs.c (v1.3.5 error handler on WQ_MEM_RECLAIM)
 #     fs/stat.c                                    (17.0: newfstat calls ksu_handle_newfstat_ret)
 #     scripts/extract-cert.c                       (17.0: builds against OpenSSL 4 / OPENSSL_NO_ENGINE)
+#     lib/lz4/*, include/linux/lz4.h               (17.0: LZ4 v1.10.0 import + kernel-stack fixes)
 #     drivers/kernelsu/policy/allowlist.c         (v1.2.0 pre-v4 profile migration)
 #     drivers/kernelsu/policy/allowlist.h          (v1.2.0 pre-v4 profile migration)
 #     drivers/kernelsu/supercall/dispatch.c        (v1.2.0 pre-v4 profile migration)
